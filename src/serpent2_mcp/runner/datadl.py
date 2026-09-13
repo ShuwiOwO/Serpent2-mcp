@@ -272,6 +272,106 @@ def _progress(payload: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Terminal progress bar
+# ---------------------------------------------------------------------------
+
+_BAR_FULL = "█"
+_BAR_EMPTY = "░"
+LOG_LINE_INTERVAL = 10.0  # seconds between log lines when no progress bar is drawn
+
+
+def _format_eta(seconds: float | None) -> str:
+    if seconds is None or seconds != seconds or seconds < 0:
+        return "--"
+    seconds = int(seconds)
+    if seconds < 60:
+        return f"{seconds}s"
+    minutes, sec = divmod(seconds, 60)
+    if minutes < 60:
+        return f"{minutes}m{sec:02d}s"
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}h{minutes:02d}m"
+
+
+class DownloadProgress:
+    """Single-line progress bar with speed and ETA.
+
+    Drawn only when the output stream is a TTY (or when explicitly enabled);
+    otherwise the caller keeps its compact periodic log lines, which is what
+    the MCP background-job logs want.
+    """
+
+    def __init__(
+        self,
+        label: str,
+        total: int | None,
+        stream=None,
+        enabled: bool | None = None,
+        width: int = 24,
+        min_interval: float = 0.15,
+    ):
+        self.label = label
+        self.total = total or None
+        self.stream = stream if stream is not None else sys.stdout
+        self.width = width
+        self.min_interval = min_interval
+        self.start = time.time()
+        self._last = 0.0
+        self._done = 0
+        self._closed = False
+        self._lock = threading.Lock()
+        try:
+            self.enabled = bool(enabled) if enabled is not None else bool(self.stream.isatty())
+            _BAR_FULL.encode(self.stream.encoding or "utf-8")
+        except (AttributeError, UnicodeEncodeError):
+            self.enabled = False
+
+    def _render(self, now: float) -> str:
+        elapsed = max(now - self.start, 1e-6)
+        rate = self._done / elapsed
+        label = self.label if len(self.label) <= 28 else self.label[:27] + "…"
+        if self.total:
+            fraction = min(max(self._done / self.total, 0.0), 1.0)
+            filled = int(fraction * self.width)
+            bar = _BAR_FULL * filled + _BAR_EMPTY * (self.width - filled)
+            eta = _format_eta((self.total - self._done) / rate if rate > 0 else None)
+            return (
+                f"{label}: [{bar}] {fraction * 100:5.1f}%  "
+                f"{human_size(self._done)}/{human_size(self.total)}  "
+                f"{human_size(rate)}/s  ETA {eta}"
+            )
+        return f"{label}: {human_size(self._done)}  {human_size(rate)}/s"
+
+    def update(self, done: int) -> None:
+        if not self.enabled:
+            return
+        with self._lock:
+            if self._closed:
+                return
+            self._done = done
+            now = time.time()
+            if now - self._last < self.min_interval:
+                return
+            self._last = now
+            try:
+                self.stream.write("\r" + self._render(now))
+                self.stream.flush()
+            except (OSError, ValueError):
+                self.enabled = False
+
+    def close(self) -> None:
+        if not self.enabled or self._closed:
+            return
+        with self._lock:
+            self._closed = True
+            try:
+                self.stream.write("\r" + self._render(time.time()) + "\n")
+                self.stream.flush()
+            except (OSError, ValueError):
+                pass
+
+
+# ---------------------------------------------------------------------------
 # Downloading (parallel range requests when the server supports them)
 # ---------------------------------------------------------------------------
 
@@ -376,7 +476,15 @@ def _fetch_range(
     raise RuntimeError(f"range {start}-{end} failed after {attempts} attempts: {last_error}")
 
 
-def _download_stream(url: str, part: Path, resume: bool, filename: str, log) -> None:
+def _download_stream(
+    url: str,
+    part: Path,
+    resume: bool,
+    filename: str,
+    log,
+    label: str,
+    show_progress: bool | None,
+) -> None:
     pos = part.stat().st_size if resume and part.exists() else 0
     headers = {"User-Agent": USER_AGENT, "Accept-Encoding": "identity"}
     if pos:
@@ -389,7 +497,9 @@ def _download_stream(url: str, part: Path, resume: bool, filename: str, log) -> 
             pos = 0
         total = pos + int(response.headers.get("Content-Length") or 0)
         mode = "ab" if pos and part.exists() else "wb"
-        last_report = 0.0
+        bar = DownloadProgress(label, total, enabled=show_progress)
+        last_progress = 0.0
+        last_line = 0.0
         with part.open(mode) as handle:
             while True:
                 block = response.read(1 << 22)
@@ -398,13 +508,17 @@ def _download_stream(url: str, part: Path, resume: bool, filename: str, log) -> 
                 handle.write(block)
                 pos += len(block)
                 now = time.time()
-                if now - last_report > 2.0:
-                    last_report = now
+                bar.update(pos)
+                if now - last_progress > 2.0:
+                    last_progress = now
                     _progress({"state": "downloading", "file": filename, "downloaded": pos, "total": total})
+                if not bar.enabled and now - last_line > LOG_LINE_INTERVAL:
+                    last_line = now
                     if total:
                         log(f"{filename}: {human_size(pos)} / {human_size(total)} ({100.0 * pos / total:.1f}%)")
                     else:
                         log(f"{filename}: {human_size(pos)}")
+        bar.close()
 
 
 def _download_parallel(
@@ -415,6 +529,8 @@ def _download_parallel(
     resume: bool,
     filename: str,
     log,
+    label: str,
+    show_progress: bool | None,
 ) -> None:
     part = target.with_name(target.name + ".part")
     chunk_dir = target.with_name(target.name + ".chunks")
@@ -435,48 +551,61 @@ def _download_parallel(
             completed += finish - begin + 1
 
     lock = threading.Lock()
-    progress = {"done": completed, "last": 0.0}
+    bar = DownloadProgress(label, total, enabled=show_progress)
+    progress = {"done": completed, "last": 0.0, "last_line": 0.0}
 
     def on_bytes(count: int) -> None:
         with lock:
             progress["done"] += count
+            done = max(0, min(progress["done"], total))
             now = time.time()
-            if now - progress["last"] > 2.0:
+            report_file = now - progress["last"] > 2.0
+            if report_file:
                 progress["last"] = now
-                _progress(
-                    {
-                        "state": "downloading",
-                        "mode": "parallel",
-                        "threads": threads,
-                        "file": filename,
-                        "downloaded": max(0, min(progress["done"], total)),
-                        "total": total,
-                    }
-                )
+            report_line = not bar.enabled and now - progress["last_line"] > LOG_LINE_INTERVAL
+            if report_line:
+                progress["last_line"] = now
+        bar.update(done)
+        if report_file:
+            _progress(
+                {
+                    "state": "downloading",
+                    "mode": "parallel",
+                    "threads": threads,
+                    "file": filename,
+                    "downloaded": done,
+                    "total": total,
+                }
+            )
+        if report_line:
+            log(f"{filename}: {human_size(done)} / {human_size(total)} ({100.0 * done / total:.1f}%)")
 
     log(
         f"parallel download: {len(ranges)} chunks x {human_size(DOWNLOAD_CHUNK_SIZE)}, "
         f"{threads} connections, total {human_size(total)}"
     )
-    with ThreadPoolExecutor(max_workers=threads) as pool:
-        futures = [
-            pool.submit(_fetch_range, url, begin, finish, path, on_bytes)
-            for begin, finish, path in ranges
-        ]
-        errors: list[BaseException] = []
-        for future in as_completed(futures):
-            error = future.exception()
-            if error is not None:
-                errors.append(error)
-        if errors:
-            raise RuntimeError(f"{len(errors)} download chunk(s) failed: {errors[0]}")
+    try:
+        with ThreadPoolExecutor(max_workers=threads) as pool:
+            futures = [
+                pool.submit(_fetch_range, url, begin, finish, path, on_bytes)
+                for begin, finish, path in ranges
+            ]
+            errors: list[BaseException] = []
+            for future in as_completed(futures):
+                error = future.exception()
+                if error is not None:
+                    errors.append(error)
+            if errors:
+                raise RuntimeError(f"{len(errors)} download chunk(s) failed: {errors[0]}")
 
-    log("assembling chunks ...")
-    with part.open("wb") as output:
-        for _begin, _finish, path in ranges:
-            with path.open("rb") as source:
-                shutil.copyfileobj(source, output, 1 << 22)
-    shutil.rmtree(chunk_dir, ignore_errors=True)
+        log("assembling chunks ...")
+        with part.open("wb") as output:
+            for _begin, _finish, path in ranges:
+                with path.open("rb") as source:
+                    shutil.copyfileobj(source, output, 1 << 22)
+        shutil.rmtree(chunk_dir, ignore_errors=True)
+    finally:
+        bar.close()
 
 
 def _apply_repo_mirror(url: str) -> str:
@@ -496,12 +625,15 @@ def download(
     force: bool = False,
     patch: bool = False,
     rel_root: str | Path | None = None,
+    label: str | None = None,
+    show_progress: bool | None = None,
     log=print,
 ) -> Path:
     url = _apply_repo_mirror(url)
     dest = Path(dest).expanduser()
     dest.mkdir(parents=True, exist_ok=True)
     filename = filename or url.rsplit("/", 1)[-1]
+    label = label or filename
     target = dest / filename
     if target.is_file() and target.stat().st_size > 0:
         log(f"already present: {target} ({human_size(target.stat().st_size)})")
@@ -527,9 +659,9 @@ def download(
     threads = download_threads()
     total, ranges_ok = _probe_size(url)
     if total and ranges_ok and total >= PARALLEL_MIN_SIZE and threads > 1:
-        _download_parallel(url, target, total, threads, resume, filename, log)
+        _download_parallel(url, target, total, threads, resume, filename, log, label, show_progress)
     else:
-        _download_stream(url, part, resume, filename, log)
+        _download_stream(url, part, resume, filename, log, label, show_progress)
 
     if part.exists():
         os.replace(part, target)
@@ -739,13 +871,21 @@ def install_photon(
     dest.mkdir(parents=True, exist_ok=True)
     base_url = base_url.rstrip("/")
     log(f"downloading photon data from {base_url}/photon_data/ ...")
-    xsdata = download(f"{base_url}/photon_data/mcplib.xsdata", dest, filename="mcplib.xsdata", extract=False, log=log)
+    xsdata = download(
+        f"{base_url}/photon_data/mcplib.xsdata",
+        dest,
+        filename="mcplib.xsdata",
+        extract=False,
+        label="mcplib.xsdata directory file",
+        log=log,
+    )
     download(
         f"{base_url}/photon_data/photon_data.tar.gz",
         dest,
         filename="photon_data.tar.gz",
         extract=True,
         force=True,  # re-extract on repeated installs so a broken extraction self-heals
+        label="photon physics data",
         log=log,
     )
 
@@ -914,7 +1054,16 @@ def setup_data(
 
     log(f"[1/4] downloading neutron library '{entry.key}' ...")
     _progress({"state": "setup", "step": "neutron", "library": entry.key})
-    download(_package_url(entry), dest, filename=entry.filename, extract=True, patch=True, rel_root=rel_root, log=log)
+    download(
+        _package_url(entry),
+        dest,
+        filename=entry.filename,
+        extract=True,
+        patch=True,
+        rel_root=rel_root,
+        label=f"{entry.key} neutron library",
+        log=log,
+    )
 
     thxs_entry = CATALOG_BY_KEY.get("thxs")
     if with_thxs and thxs_entry is not None:
@@ -927,6 +1076,7 @@ def setup_data(
             extract=True,
             patch=False,
             rel_root=rel_root,
+            label="thermal scattering (sss_thxs)",
             log=log,
         )
     else:
@@ -1012,6 +1162,30 @@ def setup_data(
     return result
 
 
+def _print_result(result: dict, stream=None) -> None:
+    """Compact human summary on a terminal, full JSON otherwise (job logs)."""
+    stream = stream if stream is not None else sys.stdout
+    try:
+        is_tty = bool(stream.isatty())
+    except AttributeError:
+        is_tty = False
+    if not is_tty:
+        print(json.dumps(result, indent=2, ensure_ascii=False), file=stream)
+        return
+    print(f"state: {result.get('state', 'done')}", file=stream)
+    if result.get("dest"):
+        print(f"data directory: {result['dest']}", file=stream)
+    for line in result.get("use_in_input") or []:
+        print(f"  {line}", file=stream)
+    manual = result.get("manual_download") or (result.get("photon") or {}).get("manual_download")
+    if manual:
+        print(f"manual download: {manual.get('url')} -> {manual.get('absolute_path')}", file=stream)
+    if result.get("warning"):
+        print(f"warning: {result['warning']}", file=stream)
+    if result.get("message"):
+        print(result["message"], file=stream)
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Serpent nuclear data library downloader")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -1079,11 +1253,11 @@ def main(argv: list[str] | None = None) -> None:
             ace_file=args.ace_file,
             ace_url=args.ace_url,
         )
-        print(json.dumps(result, indent=2, ensure_ascii=False))
+        _print_result(result)
         return
     if args.command == "patch-xsdata":
         result = patch_xsdata_files(args.dir, rel_root=args.rel_root, apply=not args.check)
-        print(json.dumps(result, indent=2, ensure_ascii=False))
+        _print_result(result)
         return
     if args.command == "photon":
         result = install_photon(
@@ -1095,7 +1269,7 @@ def main(argv: list[str] | None = None) -> None:
             base_url=args.base_url,
             rel_root=args.rel_root,
         )
-        print(json.dumps(result, indent=2, ensure_ascii=False))
+        _print_result(result)
         return
     if args.name:
         entry = find_entry(args.name)

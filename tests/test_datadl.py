@@ -120,6 +120,86 @@ def test_repo_mirror_rewrites_vtt_urls(monkeypatch):
     assert datadl._apply_repo_mirror(url) == url
 
 
+class _TTYStream:
+    encoding = "utf-8"
+
+    def __init__(self):
+        self.data = ""
+
+    def isatty(self):
+        return True
+
+    def write(self, text):
+        self.data += text
+
+    def flush(self):
+        pass
+
+
+class _NotTTYStream(_TTYStream):
+    def isatty(self):
+        return False
+
+
+def test_progress_bar_renders_single_line():
+    stream = _TTYStream()
+    bar = datadl.DownloadProgress("ENDF/B-VII.1 neutron library", 1_000_000, stream=stream, enabled=True, min_interval=0.0)
+    bar.update(250_000)
+    bar.update(500_000)
+    bar.close()
+    assert "\r" in stream.data
+    assert "25.0%" in stream.data
+    assert "50.0%" in stream.data
+    assert stream.data.endswith("\n")
+    assert stream.data.count("\n") == 1  # one animated line, not a wall of text
+
+
+def test_progress_bar_unknown_total():
+    stream = _TTYStream()
+    bar = datadl.DownloadProgress("file", None, stream=stream, enabled=True, min_interval=0.0)
+    bar.update(1024)
+    bar.close()
+    assert "1.00 KB" in stream.data
+
+
+def test_progress_bar_silent_on_non_tty():
+    stream = _NotTTYStream()
+    bar = datadl.DownloadProgress("file", 100, stream=stream)
+    bar.update(50)
+    bar.close()
+    assert stream.data == ""
+
+
+def test_format_eta():
+    assert datadl._format_eta(None) == "--"
+    assert datadl._format_eta(45) == "45s"
+    assert datadl._format_eta(125) == "2m05s"
+    assert datadl._format_eta(3700) == "1h01m"
+
+
+def test_print_result_human_on_tty():
+    stream = _TTYStream()
+    datadl._print_result(
+        {
+            "state": "partial",
+            "dest": "/data",
+            "use_in_input": ['set acelib "xsdata/data.xsdata"'],
+            "manual_download": {"url": "https://example/mcplib84", "absolute_path": "/data/mcplib84"},
+        },
+        stream=stream,
+    )
+    assert "state: partial" in stream.data
+    assert "set acelib" in stream.data
+    assert "/data/mcplib84" in stream.data
+    assert "{" not in stream.data  # no JSON dump on a terminal
+
+
+def test_print_result_json_when_not_tty():
+    stream = _NotTTYStream()
+    datadl._print_result({"state": "done"}, stream=stream)
+    assert json.loads(stream.data)["state"] == "done"
+
+
 def test_download_writes_progress(tmp_path: Path, http_server: str, monkeypatch):
     progress_file = tmp_path / "progress.json"
     monkeypatch.setenv("SERPENT_PROGRESS_FILE", str(progress_file))
