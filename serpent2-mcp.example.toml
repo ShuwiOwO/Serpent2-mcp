@@ -8,6 +8,8 @@
 exe = "sss2"
 # Extra directories where data libraries live (auto-detected otherwise).
 data_dirs = ["xsdata"]
+# Mirror of the VTT data repository (optional).
+# data_repo = "https://serpent.vtt.fi/repository"
 # Optional explicit data files:
 # acelib = "xsdata/data.xsdata"
 # declib = "xsdata/sss_endfb7.dec"

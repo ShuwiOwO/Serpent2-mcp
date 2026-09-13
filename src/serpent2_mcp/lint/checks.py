@@ -8,7 +8,7 @@ from pathlib import Path
 
 from ..knowledge.store import Store
 from ..knowledge.sync import load_static_cards
-from .model import Card, Issue, ParsedFile, split_cards_from_text
+from .model import Card, Issue, ParsedFile, Token, split_cards_from_text
 from .surface_types import SURFACE_TYPES
 
 _NUMERIC = re.compile(r"^[+-]?(\d+\.?\d*|\.\d+)([eEdD][+-]?\d+)?$")
@@ -405,7 +405,6 @@ class Linter:
                     density.line,
                 )
             )
-        params = {p for p in self.index.card_params(card) if p}
         signs: list[tuple[int, Token]] = []
         fractions = 0
         parse_options = {"moder", "burn", "vol", "mass", "tmp", "tms", "tft", "rgb", "fix"}

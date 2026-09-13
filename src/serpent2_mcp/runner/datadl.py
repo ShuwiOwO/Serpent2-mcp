@@ -10,14 +10,17 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sys
 import tarfile
+import threading
 import time
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from ..util import USER_AGENT, human_size, now_iso
+from ..util import USER_AGENT, human_size
 
 REPO = "https://serpent.vtt.fi/repository"
 
@@ -268,6 +271,222 @@ def _progress(payload: dict) -> None:
         pass
 
 
+# ---------------------------------------------------------------------------
+# Downloading (parallel range requests when the server supports them)
+# ---------------------------------------------------------------------------
+
+DOWNLOAD_CHUNK_SIZE = 32 * 1024 * 1024
+PARALLEL_MIN_SIZE = 64 * 1024 * 1024
+DEFAULT_DOWNLOAD_THREADS = 6
+
+
+def download_threads() -> int:
+    raw = os.environ.get("SERPENT_DOWNLOAD_THREADS", "")
+    try:
+        value = int(raw) if raw else DEFAULT_DOWNLOAD_THREADS
+    except ValueError:
+        value = DEFAULT_DOWNLOAD_THREADS
+    return max(1, min(value, 16))
+
+
+def _probe_size(url: str) -> tuple[int | None, bool]:
+    """Return (content length, range support) for a URL."""
+    headers = {"User-Agent": USER_AGENT, "Accept-Encoding": "identity"}
+    try:
+        request = urllib.request.Request(url, method="HEAD", headers=headers)
+        with urllib.request.urlopen(request, timeout=30) as response:
+            length = response.headers.get("Content-Length")
+            accept = (response.headers.get("Accept-Ranges") or "").lower()
+            if length:
+                return int(length), "bytes" in accept
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        request = urllib.request.Request(url, headers={**headers, "Range": "bytes=0-0"})
+        with urllib.request.urlopen(request, timeout=30) as response:
+            content_range = response.headers.get("Content-Range") or ""
+            if "/" in content_range and content_range.rsplit("/", 1)[-1].isdigit():
+                return int(content_range.rsplit("/", 1)[-1]), True
+            length = response.headers.get("Content-Length")
+            if length and getattr(response, "status", 200) == 200:
+                return int(length), False
+    except Exception:  # noqa: BLE001
+        pass
+    return None, False
+
+
+def _fetch_range(
+    url: str,
+    start: int,
+    end: int,
+    chunk_path: Path,
+    on_bytes,
+    attempts: int = 3,
+) -> None:
+    expected = end - start + 1
+    if chunk_path.is_file() and chunk_path.stat().st_size == expected:
+        on_bytes(expected)
+        return
+    tmp = chunk_path.with_name(chunk_path.name + ".tmp")
+    last_error: Exception | None = None
+    for attempt in range(attempts):
+        if tmp.exists():
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+        written_this_attempt = 0
+
+        def account(count: int) -> None:
+            nonlocal written_this_attempt
+            written_this_attempt += count
+            on_bytes(count)
+
+        try:
+            headers = {
+                "User-Agent": USER_AGENT,
+                "Accept-Encoding": "identity",
+                "Range": f"bytes={start}-{end}",
+            }
+            request = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(request, timeout=120) as response:
+                status = getattr(response, "status", 200)
+                if status != 206:
+                    raise RuntimeError(f"server did not honour Range (HTTP {status})")
+                with tmp.open("wb") as handle:
+                    while True:
+                        block = response.read(1 << 22)
+                        if not block:
+                            break
+                        handle.write(block)
+                        account(len(block))
+            if tmp.stat().st_size != expected:
+                raise RuntimeError(f"short read: {tmp.stat().st_size}/{expected} bytes")
+            os.replace(tmp, chunk_path)
+            return
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+            on_bytes(-written_this_attempt)
+            if tmp.exists():
+                try:
+                    tmp.unlink()
+                except OSError:
+                    pass
+            time.sleep(1.0 * (attempt + 1))
+    raise RuntimeError(f"range {start}-{end} failed after {attempts} attempts: {last_error}")
+
+
+def _download_stream(url: str, part: Path, resume: bool, filename: str, log) -> None:
+    pos = part.stat().st_size if resume and part.exists() else 0
+    headers = {"User-Agent": USER_AGENT, "Accept-Encoding": "identity"}
+    if pos:
+        headers["Range"] = f"bytes={pos}-"
+        log(f"resuming {filename} at {human_size(pos)}")
+    request = urllib.request.Request(url, headers=headers)
+    with urllib.request.urlopen(request, timeout=120) as response:
+        status = getattr(response, "status", 200)
+        if status != 206:
+            pos = 0
+        total = pos + int(response.headers.get("Content-Length") or 0)
+        mode = "ab" if pos and part.exists() else "wb"
+        last_report = 0.0
+        with part.open(mode) as handle:
+            while True:
+                block = response.read(1 << 22)
+                if not block:
+                    break
+                handle.write(block)
+                pos += len(block)
+                now = time.time()
+                if now - last_report > 2.0:
+                    last_report = now
+                    _progress({"state": "downloading", "file": filename, "downloaded": pos, "total": total})
+                    if total:
+                        log(f"{filename}: {human_size(pos)} / {human_size(total)} ({100.0 * pos / total:.1f}%)")
+                    else:
+                        log(f"{filename}: {human_size(pos)}")
+
+
+def _download_parallel(
+    url: str,
+    target: Path,
+    total: int,
+    threads: int,
+    resume: bool,
+    filename: str,
+    log,
+) -> None:
+    part = target.with_name(target.name + ".part")
+    chunk_dir = target.with_name(target.name + ".chunks")
+    if not resume and chunk_dir.exists():
+        shutil.rmtree(chunk_dir, ignore_errors=True)
+    chunk_dir.mkdir(parents=True, exist_ok=True)
+
+    ranges: list[tuple[int, int, Path]] = []
+    start = 0
+    while start < total:
+        end = min(start + DOWNLOAD_CHUNK_SIZE - 1, total - 1)
+        ranges.append((start, end, chunk_dir / f"chunk_{start:012d}"))
+        start = end + 1
+
+    completed = 0
+    for begin, finish, path in ranges:
+        if path.is_file() and path.stat().st_size == finish - begin + 1:
+            completed += finish - begin + 1
+
+    lock = threading.Lock()
+    progress = {"done": completed, "last": 0.0}
+
+    def on_bytes(count: int) -> None:
+        with lock:
+            progress["done"] += count
+            now = time.time()
+            if now - progress["last"] > 2.0:
+                progress["last"] = now
+                _progress(
+                    {
+                        "state": "downloading",
+                        "mode": "parallel",
+                        "threads": threads,
+                        "file": filename,
+                        "downloaded": max(0, min(progress["done"], total)),
+                        "total": total,
+                    }
+                )
+
+    log(
+        f"parallel download: {len(ranges)} chunks x {human_size(DOWNLOAD_CHUNK_SIZE)}, "
+        f"{threads} connections, total {human_size(total)}"
+    )
+    with ThreadPoolExecutor(max_workers=threads) as pool:
+        futures = [
+            pool.submit(_fetch_range, url, begin, finish, path, on_bytes)
+            for begin, finish, path in ranges
+        ]
+        errors: list[BaseException] = []
+        for future in as_completed(futures):
+            error = future.exception()
+            if error is not None:
+                errors.append(error)
+        if errors:
+            raise RuntimeError(f"{len(errors)} download chunk(s) failed: {errors[0]}")
+
+    log("assembling chunks ...")
+    with part.open("wb") as output:
+        for _begin, _finish, path in ranges:
+            with path.open("rb") as source:
+                shutil.copyfileobj(source, output, 1 << 22)
+    shutil.rmtree(chunk_dir, ignore_errors=True)
+
+
+def _apply_repo_mirror(url: str) -> str:
+    """Rewrite VTT repository URLs to SERPENT_DATA_REPO_URL when configured."""
+    mirror = (os.environ.get("SERPENT_DATA_REPO_URL") or "").rstrip("/")
+    if mirror and url.startswith(REPO):
+        return mirror + url[len(REPO):]
+    return url
+
+
 def download(
     url: str,
     dest: str | Path,
@@ -279,6 +498,7 @@ def download(
     rel_root: str | Path | None = None,
     log=print,
 ) -> Path:
+    url = _apply_repo_mirror(url)
     dest = Path(dest).expanduser()
     dest.mkdir(parents=True, exist_ok=True)
     filename = filename or url.rsplit("/", 1)[-1]
@@ -304,59 +524,31 @@ def download(
         return target
 
     part = target.with_name(target.name + ".part")
-    pos = part.stat().st_size if resume and part.exists() else 0
-    headers = {"User-Agent": USER_AGENT, "Accept-Encoding": "identity"}
-    if pos:
-        headers["Range"] = f"bytes={pos}-"
-        log(f"resuming {filename} at {human_size(pos)}")
-    request = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(request, timeout=120) as response:
-        status = getattr(response, "status", 200)
-        if status != 206:
-            pos = 0
-        total = pos + int(response.headers.get("Content-Length") or 0)
-        mode = "ab" if pos and part.exists() else "wb"
-        last_report = 0.0
-        with part.open(mode) as handle:
-            while True:
-                chunk = response.read(1 << 20)
-                if not chunk:
-                    break
-                handle.write(chunk)
-                pos += len(chunk)
-                now = time.time()
-                if now - last_report > 2.0:
-                    last_report = now
-                    _progress({"state": "downloading", "file": filename, "downloaded": pos, "total": total})
-                    if total:
-                        pct = 100.0 * pos / total
-                        log(f"{filename}: {human_size(pos)} / {human_size(total)} ({pct:.1f}%)")
-                    else:
-                        log(f"{filename}: {human_size(pos)}")
-    os.replace(part, target)
+    threads = download_threads()
+    total, ranges_ok = _probe_size(url)
+    if total and ranges_ok and total >= PARALLEL_MIN_SIZE and threads > 1:
+        _download_parallel(url, target, total, threads, resume, filename, log)
+    else:
+        _download_stream(url, part, resume, filename, log)
+
+    if part.exists():
+        os.replace(part, target)
     log(f"downloaded {target} ({human_size(target.stat().st_size)})")
-    _progress(
-        {
-            "state": "done",
-            "file": filename,
-            "downloaded": target.stat().st_size,
-            "total": target.stat().st_size,
-            "path": str(target),
-        }
-    )
+    final: dict = {
+        "state": "done",
+        "file": filename,
+        "downloaded": target.stat().st_size,
+        "total": target.stat().st_size,
+        "path": str(target),
+    }
+    _progress(final)
     if extract:
         _extract(target, dest, log)
-        payload = {
-            "state": "extracted",
-            "file": filename,
-            "downloaded": target.stat().st_size,
-            "total": target.stat().st_size,
-            "path": str(target),
-            "dest": str(dest),
-        }
+        final["state"] = "extracted"
+        final["dest"] = str(dest)
         if patch:
-            payload["patch"] = patch_xsdata_files(dest, rel_root=rel_root, log=log)
-        _progress(payload)
+            final["patch"] = patch_xsdata_files(dest, rel_root=rel_root, log=log)
+        _progress(final)
     return target
 
 
@@ -560,8 +752,6 @@ def install_photon(
     default_target = dest / "mcplib84"
 
     def _install(source: Path) -> Path:
-        import shutil
-
         try:
             source.resolve().relative_to(dest.resolve())
             installed = source.resolve()  # already inside the data directory: use in place
@@ -799,6 +989,24 @@ def setup_data(
                 "save_as": _rel_path(manual_target, rel_root),
                 "absolute_path": str(manual_target),
             }
+            banner = [
+                "",
+                "=" * 74,
+                "  ACTION REQUIRED for photon transport (neutrons already work)",
+                "=" * 74,
+                "  1. Download MCPLIB84 from:",
+                f"       {CATALOG_BY_KEY['mcplib84'].homepage}",
+                "  2. Save the file exactly as:",
+                f"       {manual_target}",
+                f"       (or '{_rel_path(manual_target, rel_root)}' relative to the workspace root)",
+                "  3. Verify: ~15 MB, first line starts with '  1000.84p'.",
+                "  4. Re-run install_photon_data / setup_data (or check_data_paths).",
+                "  Do not publish mcplib84: LANL/RSICC licensed data.",
+                "=" * 74,
+                "",
+            ]
+            for line in banner:
+                log(line)
     _progress(result)
     log(f"setup complete: {result['state']}")
     return result

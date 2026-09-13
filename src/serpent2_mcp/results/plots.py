@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import math
 from pathlib import Path
-from typing import Any
 
 from .matlab import parse_matlab_file
 from .outputs import detector_series
@@ -150,7 +148,6 @@ def plot_variables(
     log_y: bool = False,
 ) -> Path:
     plt = _plt()
-    labels = _labels(lang)
     data = parse_matlab_file(source_path)
     if x_name not in data:
         raise KeyError(f"variable '{x_name}' not found")

@@ -16,7 +16,7 @@ def _run(coro):
 
 
 def test_server_lists_tools_and_calls_tools(tmp_path):
-    mcp = pytest.importorskip("mcp")
+    pytest.importorskip("mcp")
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
 
@@ -109,6 +109,10 @@ def test_server_lists_tools_and_calls_tools(tmp_path):
                 )
                 results = json.loads(response.content[0].text)
                 assert results["summary"]["keff"]["ana_keff"]["mean"] == 1.02
+
+                response = await session.call_tool("plot_results", {"kind": "keff", "workdir": str(tmp_path)})
+                plot_text = response.content[0].text
+                assert "NameError" not in plot_text and "not defined" not in plot_text
 
                 response = await session.call_tool("get_environment", {})
                 env_payload = json.loads(response.content[0].text)

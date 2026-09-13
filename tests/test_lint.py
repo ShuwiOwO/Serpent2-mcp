@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from serpent2_mcp.lint import lint_path, lint_text
 
 GOOD_INPUT = """

@@ -31,13 +31,14 @@ from .knowledge.sync import (
     sync,
     sync_status,
 )
-from .lint import Index, Linter, lint_path, lint_text
+from .lint import Index, lint_path, lint_text
 from .lint.model import Issue
 from .results import outputs as results_outputs
+from .results import plots
 from .runner import datadl
 from .runner.jobs import Job, Jobs
 from .runner.probe import convert_option_style, probe_cached, resolve_executable
-from .util import human_size, now_iso, read_json, run_capture, stderr_log, truncate
+from .util import human_size, now_iso, run_capture, stderr_log, truncate
 
 INSTRUCTIONS = """\
 Serpent 2 is a continuous-energy 3-D Monte Carlo particle transport code (VTT,

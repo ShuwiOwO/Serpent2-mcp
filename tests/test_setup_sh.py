@@ -22,7 +22,17 @@ def test_setup_sh_syntax():
 def test_setup_sh_help_lists_data_options():
     result = subprocess.run(["sh", str(SETUP), "--help"], capture_output=True, text=True)
     assert result.returncode == 0
-    for token in ("--data", "--data-dir", "--no-photon", "--no-thxs", "--yes", "--offline", "--status"):
+    for token in (
+        "--data",
+        "--data-dir",
+        "--no-photon",
+        "--no-thxs",
+        "--yes",
+        "--offline",
+        "--status",
+        "--opencode",
+        "--no-opencode",
+    ):
         assert token in result.stdout
 
 

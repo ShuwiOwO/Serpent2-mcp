@@ -23,11 +23,19 @@ dependencies = [
 
 [project.optional-dependencies]
 plots = ["matplotlib>=3.7"]
-test = ["pytest>=7"]
+test = ["pytest>=7", "ruff>=0.5"]
 
 [project.scripts]
 serpent2-mcp = "serpent2_mcp.server:main"
 serpent2-mcp-sync = "serpent2_mcp.knowledge.sync:main"
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B"]
+ignore = ["E501"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

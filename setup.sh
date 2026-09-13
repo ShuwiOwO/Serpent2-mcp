@@ -20,9 +20,15 @@
 #   --no-thxs         skip the thermal scattering library (sss_thxs)
 #   --yes             non-interactive: use ENDF/B-VII.1 when --data is omitted
 #
+# OpenCode options:
+#   --opencode        write/merge opencode.json in the current directory
+#   --opencode-global write/merge ~/.config/opencode/opencode.json
+#   --no-opencode     never ask; print the manual instruction instead
+#
 # The neutron package includes ACE files, decay (dec) and fission-yield (nfy)
 # data. Paths inside the directory files are rewritten relative to this
-# directory (the workspace root, where sss2 lives).
+# directory (the workspace root, where sss2 lives). Large downloads use
+# parallel range requests (SERPENT_DOWNLOAD_THREADS, default 6).
 #
 # Only mcplib84 (photon ACE cross sections, LANL/RSICC licensed) cannot be
 # downloaded automatically; the script tells you exactly where to put it.
@@ -32,6 +38,7 @@
 
 set -eu
 
+CALL_DIR=$(pwd)
 DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 cd "$DIR"
 
@@ -45,6 +52,7 @@ DATA_DIR_FLAG=""
 WITH_PHOTON=1
 WITH_THXS=1
 ASSUME_YES=0
+OPENCODE_MODE="ask"
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -61,7 +69,10 @@ while [ $# -gt 0 ]; do
         --no-photon) WITH_PHOTON=0 ;;
         --no-thxs) WITH_THXS=0 ;;
         --yes|-y) ASSUME_YES=1 ;;
-        -h|--help) sed -n '2,32p' "$0"; exit 0 ;;
+        --opencode) OPENCODE_MODE="local" ;;
+        --opencode-global) OPENCODE_MODE="global" ;;
+        --no-opencode) OPENCODE_MODE="none" ;;
+        -h|--help) sed -n '2,38p' "$0"; exit 0 ;;
         *) echo "Unknown option: $1" >&2; exit 2 ;;
     esac
     shift
@@ -281,6 +292,48 @@ fi
 echo ""
 echo "Done. Verify the server starts:"
 echo "  $DIR/.venv/bin/python -m serpent2_mcp --status"
-echo ""
-echo "Add this to your opencode.json (see README.md for details):"
-echo "  \"mcp\": { \"serpent\": { \"type\": \"local\", \"command\": [\"$DIR/.venv/bin/python\", \"-m\", \"serpent2_mcp\"] } }"
+
+# --- opencode.json ----------------------------------------------------------
+
+OC_TARGET=""
+if [ "$OPENCODE_MODE" = "local" ]; then
+    OC_TARGET="$CALL_DIR/opencode.json"
+elif [ "$OPENCODE_MODE" = "global" ]; then
+    OC_TARGET="$HOME/.config/opencode/opencode.json"
+elif [ "$OPENCODE_MODE" = "ask" ] && [ -t 0 ]; then
+    echo ""
+    echo "Create/update the OpenCode configuration automatically?"
+    echo "  1) yes, in this directory: $CALL_DIR/opencode.json"
+    echo "  2) yes, globally:          $HOME/.config/opencode/opencode.json"
+    echo "  3) no, I will add it myself"
+    printf 'Choice [3]: '
+    oc=""
+    read oc || oc=""
+    case "$oc" in
+        1) OC_TARGET="$CALL_DIR/opencode.json" ;;
+        2) OC_TARGET="$HOME/.config/opencode/opencode.json" ;;
+        *) OC_TARGET="" ;;
+    esac
+fi
+
+if [ -n "$OC_TARGET" ]; then
+    mkdir -p "$(dirname "$OC_TARGET")"
+    OC_ENV_ARGS="--lang ru"
+    if [ "$DATA_OK" = "1" ]; then
+        OC_ENV_ARGS="$OC_ENV_ARGS --env SERPENT_DATA_DIR=$DATA_DIR"
+    fi
+    if "$VENV_PY" -m serpent2_mcp.opencode_config \
+        --path "$OC_TARGET" --venv-python "$DIR/.venv/bin/python" $OC_ENV_ARGS >/dev/null; then
+        echo ""
+        echo "OpenCode config written: $OC_TARGET"
+        echo "Restart OpenCode for the MCP server to appear."
+    else
+        echo "WARNING: could not update $OC_TARGET; add this manually:" >&2
+        echo "  \"mcp\": { \"serpent\": { \"type\": \"local\", \"command\": [\"$DIR/.venv/bin/python\", \"-m\", \"serpent2_mcp\"] } }" >&2
+    fi
+else
+    echo ""
+    echo "Add this to your opencode.json (project or ~/.config/opencode/opencode.json):"
+    echo "  \"mcp\": { \"serpent\": { \"type\": \"local\", \"command\": [\"$DIR/.venv/bin/python\", \"-m\", \"serpent2_mcp\"] } }"
+    echo "Or re-run: ./setup.sh --opencode   (writes it automatically)"
+fi

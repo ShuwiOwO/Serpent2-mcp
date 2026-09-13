@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import functools
 import http.server
 import json
 import threading
@@ -13,9 +12,60 @@ import pytest
 from serpent2_mcp.runner import datadl
 
 
-class _QuietHandler(http.server.SimpleHTTPRequestHandler):
+class _RangeHandler(http.server.BaseHTTPRequestHandler):
+    """Minimal static file server with HEAD and Range support."""
+
+    root: Path
+
     def log_message(self, *args):  # noqa: D102
         pass
+
+    def _resolve(self) -> Path | None:
+        candidate = (self.root / self.path.lstrip("/")).resolve()
+        try:
+            candidate.relative_to(self.root.resolve())
+        except ValueError:
+            return None
+        return candidate if candidate.is_file() else None
+
+    def _send_file(self, path: Path, body: bool) -> None:
+        data = path.read_bytes()
+        range_header = self.headers.get("Range")
+        if range_header and range_header.startswith("bytes="):
+            spec = range_header[len("bytes="):]
+            start_text, _, end_text = spec.partition("-")
+            start = int(start_text) if start_text else 0
+            end = int(end_text) if end_text else len(data) - 1
+            end = min(end, len(data) - 1)
+            chunk = data[start:end + 1]
+            self.send_response(206)
+            self.send_header("Content-Range", f"bytes {start}-{end}/{len(data)}")
+            self.send_header("Content-Length", str(len(chunk)))
+            self.send_header("Accept-Ranges", "bytes")
+            self.end_headers()
+            if body:
+                self.wfile.write(chunk)
+            return
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Accept-Ranges", "bytes")
+        self.end_headers()
+        if body:
+            self.wfile.write(data)
+
+    def do_HEAD(self):  # noqa: N802
+        path = self._resolve()
+        if path is None:
+            self.send_error(404)
+            return
+        self._send_file(path, body=False)
+
+    def do_GET(self):  # noqa: N802
+        path = self._resolve()
+        if path is None:
+            self.send_error(404)
+            return
+        self._send_file(path, body=True)
 
 
 @pytest.fixture()
@@ -23,8 +73,11 @@ def http_server(tmp_path: Path):
     payload = tmp_path / "payload"
     payload.mkdir()
     (payload / "lib.bin").write_bytes(b"0123456789" * 10000)
-    handler = functools.partial(_QuietHandler, directory=str(payload))
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+
+    class Handler(_RangeHandler):
+        root = payload
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -59,6 +112,14 @@ def test_catalog_aliases():
     assert datadl.find_entry("unknown-library") is None
 
 
+def test_repo_mirror_rewrites_vtt_urls(monkeypatch):
+    monkeypatch.setenv("SERPENT_DATA_REPO_URL", "https://mirror.example/serpent")
+    url = "https://serpent.vtt.fi/repository/Serpent_2_xsdata/s2v0_endfb71.tar.gz"
+    assert datadl._apply_repo_mirror(url) == "https://mirror.example/serpent/Serpent_2_xsdata/s2v0_endfb71.tar.gz"
+    monkeypatch.delenv("SERPENT_DATA_REPO_URL")
+    assert datadl._apply_repo_mirror(url) == url
+
+
 def test_download_writes_progress(tmp_path: Path, http_server: str, monkeypatch):
     progress_file = tmp_path / "progress.json"
     monkeypatch.setenv("SERPENT_PROGRESS_FILE", str(progress_file))
@@ -73,12 +134,76 @@ def test_download_writes_progress(tmp_path: Path, http_server: str, monkeypatch)
     assert not list(dest.glob("*.part"))
 
 
-def test_download_resume_overwrites_stale_part(tmp_path: Path, http_server: str):
+def test_download_resume_continues_part(tmp_path: Path, http_server: str):
     dest = tmp_path / "out"
     dest.mkdir()
-    (dest / "lib.bin.part").write_bytes(b"x" * 50000)  # server ignores Range -> restart
+    payload = (tmp_path / "payload" / "lib.bin").read_bytes()
+    (dest / "lib.bin.part").write_bytes(payload[:50000])  # genuine interrupted prefix
     path = datadl.download(f"{http_server}/lib.bin", dest, log=lambda _m: None)
-    assert path.read_bytes() == b"0123456789" * 10000
+    assert path.read_bytes() == payload
+
+
+def test_download_stream_restarts_without_range_support(tmp_path: Path):
+    payload_dir = tmp_path / "basic"
+    payload_dir.mkdir()
+    data = b"0123456789" * 10000
+    (payload_dir / "lib.bin").write_bytes(data)
+
+    class QuietHandler(http.server.SimpleHTTPRequestHandler):
+        def log_message(self, *args):  # noqa: D102
+            pass
+
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, directory=str(payload_dir), **kwargs)
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), QuietHandler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        base = f"http://127.0.0.1:{server.server_address[1]}"
+        dest = tmp_path / "out"
+        dest.mkdir()
+        (dest / "lib.bin.part").write_bytes(b"x" * 50000)  # stale file, no Range support
+        path = datadl.download(f"{base}/lib.bin", dest, log=lambda _m: None)
+        assert path.read_bytes() == data
+    finally:
+        server.shutdown()
+
+
+def test_download_threads_env(monkeypatch):
+    monkeypatch.delenv("SERPENT_DOWNLOAD_THREADS", raising=False)
+    assert datadl.download_threads() == datadl.DEFAULT_DOWNLOAD_THREADS
+    monkeypatch.setenv("SERPENT_DOWNLOAD_THREADS", "3")
+    assert datadl.download_threads() == 3
+    monkeypatch.setenv("SERPENT_DOWNLOAD_THREADS", "99")
+    assert datadl.download_threads() == 16
+    monkeypatch.setenv("SERPENT_DOWNLOAD_THREADS", "nonsense")
+    assert datadl.download_threads() == datadl.DEFAULT_DOWNLOAD_THREADS
+
+
+def test_parallel_download(tmp_path: Path, http_server: str, monkeypatch):
+    monkeypatch.setenv("SERPENT_DOWNLOAD_THREADS", "3")
+    monkeypatch.setattr(datadl, "PARALLEL_MIN_SIZE", 100_000)
+    monkeypatch.setattr(datadl, "DOWNLOAD_CHUNK_SIZE", 100_000)
+    payload = (tmp_path / "payload" / "lib.bin").read_bytes()
+    dest = tmp_path / "out"
+    path = datadl.download(f"{http_server}/lib.bin", dest, log=lambda _m: None)
+    assert path.read_bytes() == payload
+    assert not (dest / "lib.bin.chunks").exists()
+    assert not list(dest.glob("*.part"))
+
+
+def test_parallel_download_resumes_completed_chunks(tmp_path: Path, http_server: str, monkeypatch):
+    monkeypatch.setenv("SERPENT_DOWNLOAD_THREADS", "3")
+    monkeypatch.setattr(datadl, "PARALLEL_MIN_SIZE", 100_000)
+    monkeypatch.setattr(datadl, "DOWNLOAD_CHUNK_SIZE", 100_000)
+    payload = (tmp_path / "payload" / "lib.bin").read_bytes()
+    dest = tmp_path / "out"
+    chunk_dir = dest / "lib.bin.chunks"
+    chunk_dir.mkdir(parents=True)
+    (chunk_dir / f"chunk_{0:012d}").write_bytes(payload[:100_000])  # already complete
+    path = datadl.download(f"{http_server}/lib.bin", dest, log=lambda _m: None)
+    assert path.read_bytes() == payload
+    assert not chunk_dir.exists()
 
 
 def test_download_extracts_tarball_into_dest(tmp_path: Path, http_server: str):
