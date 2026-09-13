@@ -86,6 +86,11 @@ cd /путь/к/Serpent2-mcp
 На macOS без Serpent доступны все «знаниевые» инструменты, статическая
 валидация и скачивание данных; расчёты можно запускать на Linux по SSH.
 
+Данные с нуля в пустой рабочей папке (где уже лежит `./sss2`): вызовите
+`serpent_setup_data(neutron="endfb71")` — он скачает нейтронную библиотеку и
+термальное рассеяние, пропишет пути относительно корня workspace и вернёт
+готовые `set`-строки (подробнее — «Установка данных с нуля»).
+
 ---
 
 ## Установка на другой ПК (Linux)
@@ -227,8 +232,12 @@ SSH-бэкенда недоступен — используйте его на �
 | `serpent_job_kill` | остановить задачу |
 | `serpent_get_results` | сводка `_res.m`/`_det.m`/`_dep.m` в JSON |
 | `serpent_plot_results` | PNG: спектры детекторов, k-eff, burnup, произвольные переменные |
+| `serpent_setup_data` | с нуля: нейтронный пакет + термальное рассеяние + photon data, пути и готовые `set`-строки |
+| `serpent_mcplib84_instructions` | что и куда положить вручную (MCPLIB84 — лицензия LANL/RSICC) |
 | `serpent_list_data_libraries` | каталог библиотек VTT (ENDF/B-VII.1, JEFF-3.2, JENDL-4.0, FENDL-3.0, …) |
 | `serpent_download_data_library` | фоновая докачка библиотеки с resume и распаковкой |
+| `serpent_install_photon_data` | фотонные данные: VTT `mcplib.xsdata` + `photon_data` и привязка `mcplib84` из `acedata/` с патчем путей |
+| `serpent_check_data_paths` | проверка/починка путей внутри `*.xsdata` (`apply=false` — только отчёт) |
 | `serpent_sync_docs` | обновить/пересобрать кэш документации |
 
 Типовой цикл: `get_card` → `validate_input` → `run` → `job_status` →
@@ -253,15 +262,17 @@ SSH-бэкенда недоступен — используйте его на �
 | `endfb71_edep` | спец. библиотека для energy deposition | 3.77 ГБ |
 | `thxs` | библиотеки теплового рассеяния S(α,β) | 91 МБ |
 | `sss_endfb7.dec`, `sss_endfb7.nfy` | данные распада и выходы деления | 35 МБ / 7 МБ |
-| `photon_data`, `mcplib84` | фотонные данные | 7.7 МБ / 15 КБ |
+| `photon_data` | фотонная физика для `set pdatadir` (VTT) | 7.7 МБ |
+| `photon_xsdata` | отдельный directory-файл `mcplib.xsdata` (VTT), если в основном `data.xsdata` нет `.84p` | 15 КБ |
+| `mcplib84` | ACE-данные MCPLIB84 — обычно уже лежат в `acedata/` пакета xsdata | ~15–200 МБ |
 | `jeff40.xsdata`, `endfb81.xsdata`, `jendl5.xsdata`, `fendl32c.xsdata` | исправленные directory-файлы для новых оценок | < 1 МБ |
 
 Куда кладётся:
 
-- по умолчанию — в первый каталог из `SERPENT_DATA_DIR`, иначе в `./data`
-  рядом с рабочей папкой;
+- по умолчанию — в первый каталог из `SERPENT_DATA_DIR`, иначе в `./xsdata`
+  рядом с рабочей папкой (там же, где обычно лежит `sss2`);
 - `.tar.gz` распаковывается **прямо в этот каталог**, поэтому рядом
-  появляются `data.xsdata`, `*.dec`, `*.nfy` — их и указывайте в
+  появляются `data.xsdata`, `acedata/`, `*.dec`, `*.nfy` — их и указывайте в
   `set acelib` / `set declib` / `set nfylib`;
 - загрузка идёт в фоне: `serpent_job_status(job_id)` показывает
   `progress` (байты/всего) и хвост лога; докачка после обрыва
@@ -269,9 +280,91 @@ SSH-бэкенда недоступен — используйте его на �
 - данные скачиваются **на машине, где запущен MCP-сервер**; для удалённых
   расчётов их нужно получить на целевом хосте.
 
+### Установка данных с нуля
+
+Один вызов готовит каталог целиком (фоновая задача, 6–8 ГБ):
+
+```
+serpent_setup_data(neutron="endfb71", dest="xsdata")
+#   neutron: endfb71 | jeff32 | jendl40 | fendl30
+#   with_photon=true по умолчанию
+```
+
+Что происходит: скачивается и распаковывается нейтронный пакет (внутри уже
+есть decay/fission-yield данные) **и термальное рассеяние** (`sss_thxs`,
+~253 МБ), все пути `/xs/data/...` внутри `*.xsdata` переписываются на
+локальные файлы **относительно корня рабочей папки**, затем ставится фотонная
+физика. По завершении (`serpent_job_status` → `progress`) в отчёте и в
+`serpent_get_environment` будут готовые строки:
+
+```
+set acelib "xsdata/data.xsdata"
+set declib "xsdata/sss_endfb7.dec"
+set nfylib "xsdata/sss_endfb7.nfy"
+set pdatadir "xsdata/photon_data"
+```
+
+Если каких-то файлов не хватает, инструмент вернёт `state: partial` и список
+`missing`. Единственный файл, который **нельзя** скачать автоматически —
+`mcplib84` (фотонные ACE-кросс-секции, лицензия LANL/RSICC, США). По нему
+`setup_data` вернёт блок `manual_download` с точным путём, а подсказать
+человеку можно инструментом:
+
+```
+serpent_mcplib84_instructions()
+# → download_url, place_file_at (например "xsdata/mcplib84"), абсолютный путь,
+#   альтернатива photon_libraries/mcplib84, проверка файла и следующий шаг
+```
+
+После того как файл положен, достаточно вызвать
+`serpent_install_photon_data` или `serpent_check_data_paths` — пути будут
+проверены и прописаны. Если фотонный транспорт не нужен, `mcplib84` можно
+игнорировать: нейтронные расчёты полностью готовы.
+
 Библиотеки JEFF-4.0, ENDF/B-VIII.1, JENDL-5 и FENDL-3.2c (сами ACE-данные)
 распространяются не VTT, а OECD/NEA, NNDC, JAEA и IAEA; в каталоге для них
 есть только исправленные directory-файлы.
+
+### Фотонные данные (photon transport)
+
+Фотонные кросс-секции — это ACE-файл `mcplib84`, на который ссылаются записи
+`.84p` в directory-файле. Важно:
+
+- **пакеты VTT содержат только нейтронные данные** (см. VTT-R-00118-18:
+  «includes only free-atom neutron interaction data»), поэтому `mcplib84` в
+  них нет;
+- VTT хостит физические данные для `set pdatadir` (`photon_data.tar.gz`) и
+  отдельный directory-файл `mcplib.xsdata` (только индекс, без данных);
+- в сборках/старых рабочих папках (как `Serpent2/xsdata` с кластера)
+  `mcplib84` обычно уже лежит в `acedata/`, и основной `data.xsdata` содержит
+  записи `.84p`/`.63p` — тогда всё работает сразу, без `mcplib.xsdata`.
+
+Рабочий процесс:
+
+```
+# 1. Нейтронная библиотека + фотонная физика одним вызовом:
+serpent_setup_data(neutron="endfb71", dest="xsdata")
+
+# 2. Если mcplib84 есть в xsdata/acedata/ или photon_libraries/ — инструмент
+#    найдёт его сам. Если нет — передайте его явно:
+serpent_setup_data(neutron="endfb71", dest="xsdata",
+                   ace_file="photon_libraries/mcplib84")
+#    или ace_url="https://..."
+
+# 3. В input (пути — относительно каталога запуска sss2, т.е. корня workspace):
+set acelib "xsdata/data.xsdata" "xsdata/mcplib.xsdata"
+set pdatadir "xsdata/photon_data"
+```
+
+Проверить и починить пути во всех `*.xsdata` можно инструментом
+`serpent_check_data_paths(directory="xsdata")` (или `apply=false` для отчёта
+без записи): он находит каждый файл по имени, переписывает пути и показывает,
+чего не хватает (например, `mcplib84`).
+
+Источник `mcplib84`, если его нет: `https://nucleardata.lanl.gov/ace/mcplib84/`
+(сайт LANL периодически недоступен) или другая ваша копия LANL/RSICC.
+**Не публикуйте данные LANL/RSICC (`photon_libraries/`, `data/`, `mcplib84`)
+в открытом репозитории**; эти пути добавлены в `.gitignore`.
 
 ---
 

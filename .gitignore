@@ -32,6 +32,11 @@ wheelhouse/
 *.dec
 *.nfy
 *.bra
+data/
+
+# --- Photon data: mcplib84 is LANL/RSICC data, not for public redistribution ---
+photon_libraries/
+mcplib84
 
 # --- Serpent calculations run locally (inputs/outputs) ---
 In_*.txt

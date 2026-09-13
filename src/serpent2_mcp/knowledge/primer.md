@@ -193,6 +193,24 @@ Environment variables that can replace the corresponding options:
 `SERPENT_DATA`, `SERPENT_ACELIB`, `SERPENT_DECLIB`, `SERPENT_NFYLIB`,
 `SERPENT_RNG_SEED`, `SERPENT_OMP_NUM_THREADS`, `SERPENT_MEM_FRAC`.
 
+Path rules (important):
+
+- File names in `set acelib`/`set pdatadir`/... are resolved relative to the
+  **working directory where `sss2` is started**, or given as absolute paths.
+  Keeping inputs and the `xsdata/` directory under one workspace root and
+  starting Serpent there lets you use short relative paths such as
+  `set acelib "xsdata/data.xsdata"`.
+- `SERPENT_DATA` sets the default search path for the data files referenced
+  *inside* directory files; if it is not set, those entries must contain
+  directory paths themselves.
+- Directory files downloaded from the VTT repository reference data files as
+  `/xs/data/...`. The server tools (`download_data_library`,
+  `install_photon_data`, `check_data_paths`) rewrite these entries to the
+  locally extracted files, relative to the workspace root when possible.
+- Typical layout: `xsdata/` containing `data.xsdata`, `acedata/` (ACE files,
+  including `mcplib84` for photon transport), `photon_data/` (physics data for
+  `set pdatadir`), and `sss_endfb7.dec/.nfy`.
+
 The `list_data_libraries` / `download_data_library` tools know the official
 VTT data repository (ENDF/B-VII.1, JEFF-3.2, JENDL-4.0, FENDL-3.0 and others).
 

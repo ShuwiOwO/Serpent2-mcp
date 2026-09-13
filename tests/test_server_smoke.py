@@ -66,6 +66,11 @@ def test_server_lists_tools_and_calls_tools(tmp_path):
                     "get_results",
                     "plot_results",
                     "get_environment",
+                    "install_photon_data",
+                    "download_data_library",
+                    "check_data_paths",
+                    "setup_data",
+                    "mcplib84_instructions",
                 } <= names
 
                 response = await session.call_tool("get_card", {"name": "surf"})
@@ -109,5 +114,10 @@ def test_server_lists_tools_and_calls_tools(tmp_path):
                 env_payload = json.loads(response.content[0].text)
                 assert env_payload["executable"]["found"] is True
                 assert "config" in env_payload
+
+                response = await session.call_tool("mcplib84_instructions", {})
+                instructions = json.loads(response.content[0].text)
+                assert instructions["status"] == "missing"
+                assert instructions["place_file_at"].endswith("xsdata/mcplib84")
 
     _run(scenario())

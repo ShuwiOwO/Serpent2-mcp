@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import difflib
 import json
+import os
 import re
 import shlex
 import sys
@@ -60,7 +61,9 @@ Follow this workflow for every Serpent task:
 5. Interpret results with get_results (k-eff/balances from _res.m, detectors
    from _det.m, inventory from _dep.m) and draw PNG plots with plot_results.
 6. Use get_environment to find the executable, version and data libraries;
-   use list_data_libraries / download_data_library to fetch cross-section data.
+   use list_data_libraries / download_data_library to fetch cross-section data
+   (for photon transport call install_photon_data; the mcplib84 ACE data file
+   must be obtained manually from LANL).
 
 Minimal external-source input: set title; surf; cell; mat; src ...; set nps N;
 set acelib "path". Criticality replaces src/set nps with set pop NPG NGEN NSKIP.
@@ -195,6 +198,21 @@ def _require_allowed(settings: Settings, path: Path) -> None:
         )
 
 
+def _rel_to(settings: Settings, path: str | Path) -> str:
+    """Path relative to the workspace root (where sss2 is usually run from).
+
+    Falls back to the absolute path when it is outside the workspace.
+    """
+    try:
+        target = Path(path).resolve()
+        relative = os.path.relpath(str(target), str(settings.workspace.resolve()))
+        if not relative.startswith(".."):
+            return relative
+        return str(target)
+    except (OSError, ValueError):
+        return str(path)
+
+
 def _parse_serpent_errors(text: str) -> list[dict[str, Any]]:
     errors: list[dict[str, Any]] = []
     pattern = re.compile(
@@ -246,6 +264,12 @@ def create_server(settings: Settings) -> Server:
         probe = probe_cached(s, refresh)
         docs = sync_status(s)
         data_files: list[dict[str, Any]] = []
+        input_hints: list[str] = []
+
+        def _add_hint(hint: str) -> None:
+            if hint not in input_hints:
+                input_hints.append(hint)
+
         for directory in s.data_dirs:
             for pattern in ("*.xsdata", "*.dec", "*.nfy", "*.bra"):
                 for path in sorted(directory.glob(pattern)):
@@ -253,9 +277,19 @@ def create_server(settings: Settings) -> Server:
                         size = path.stat().st_size
                     except OSError:
                         size = 0
-                    data_files.append({"path": str(path), "size": human_size(size)})
-                    if len(data_files) >= 80:
-                        break
+                    relative = _rel_to(s, path)
+                    data_files.append({"path": str(path), "relative": relative, "size": human_size(size)})
+                    if path.suffix == ".xsdata":
+                        _add_hint(f'set acelib "{relative}"')
+                    elif path.suffix == ".dec":
+                        _add_hint(f'set declib "{relative}"')
+                    elif path.suffix == ".nfy":
+                        _add_hint(f'set nfylib "{relative}"')
+                    elif path.suffix == ".bra":
+                        _add_hint(f'set bralib "{relative}"')
+            photon_dir_candidate = directory / "photon_data"
+            if photon_dir_candidate.is_dir():
+                _add_hint(f'set pdatadir "{_rel_to(s, photon_dir_candidate)}"')
         warnings: list[str] = []
         if not probe.get("found"):
             warnings.append(
@@ -267,6 +301,32 @@ def create_server(settings: Settings) -> Server:
                 "Detected a pre-2.0 Serpent version: some modern cards/options may not exist. "
                 "Consult the version notes in get_reference('versions')."
             )
+
+        photon_dir = s.workspace / "photon_libraries"
+        photon_ace: list[dict[str, Any]] = []
+        if photon_dir.is_dir():
+            for path in sorted(photon_dir.iterdir()):
+                try:
+                    if path.is_file() and path.name.lower().startswith(("mcplib", "mcp")):
+                        photon_ace.append({"path": str(path), "size": human_size(path.stat().st_size)})
+                except OSError:
+                    continue
+        photon_installed: list[str] = []
+        for directory in s.data_dirs:
+            for name in ("mcplib.xsdata", "mcplib84"):
+                for candidate in sorted(directory.rglob(name)):
+                    if candidate.is_file():
+                        photon_installed.append(str(candidate))
+            photon_data_dir = directory / "photon_data"
+            if photon_data_dir.is_dir():
+                photon_installed.append(str(photon_data_dir))
+        has_mcplib_ace = any(Path(path).name == "mcplib84" for path in photon_installed)
+        if photon_ace and not has_mcplib_ace:
+            warnings.append(
+                "Local mcplib84 ACE file found in photon_libraries but not installed; "
+                "call install_photon_data to copy it and patch mcplib.xsdata."
+            )
+
         payload = {
             "server_version": __version__,
             "workspace": str(s.workspace),
@@ -274,6 +334,13 @@ def create_server(settings: Settings) -> Server:
             "executable": probe,
             "docs": docs,
             "data_files": data_files[:80],
+            "paths_relative_to": str(s.workspace),
+            "input_hints": input_hints[:20],
+            "photon": {
+                "source_dir": str(photon_dir),
+                "ace_candidates": photon_ace,
+                "installed": photon_installed,
+            },
             "warnings": warnings,
             "time": now_iso(),
         }
@@ -799,12 +866,29 @@ def create_server(settings: Settings) -> Server:
         entry = datadl.find_entry(name) if name else None
         if name and entry is None:
             return f"Unknown library '{name}'. Use list_data_libraries to see valid keys."
+        if entry is not None and entry.manual:
+            payload = {
+                "manual": True,
+                "library": entry.to_dict(),
+                "message": entry.note,
+                "next_steps": [
+                    f"1. Download the mcplib84 ACE data file from {entry.homepage}",
+                    "2. Put it into <workspace>/photon_libraries/ (or pass ace_source to install_photon_data)",
+                    "3. Call install_photon_data: it downloads mcplib.xsdata and photon_data.tar.gz "
+                    "from https://serpent.vtt.fi/repository/photon_data/, copies the ACE file and fixes "
+                    "the paths inside mcplib.xsdata",
+                    '4. In the input: set acelib "data.xsdata" "mcplib.xsdata" and '
+                    'set pdatadir "<data_dir>/photon_data"',
+                    "Do not commit LANL/RSICC data to a public repository.",
+                ],
+            }
+            return json.dumps(payload, indent=2, ensure_ascii=False)
         if dest:
             dest_path = s.resolve(dest)
         elif s.data_dirs:
             dest_path = s.data_dirs[0]
         else:
-            dest_path = s.workspace / "data"
+            dest_path = s.workspace / "xsdata"
         try:
             _require_allowed(s, dest_path)
         except ValueError as exc:
@@ -823,6 +907,9 @@ def create_server(settings: Settings) -> Server:
             do_extract = entry.extract if extract is None else extract
             if not do_extract:
                 argv.append("--no-extract")
+            elif entry.kind == "xsdata":
+                # Patch '/xs/data/' paths inside the extracted directory files.
+                argv += ["--patch", "--rel-root", str(s.workspace)]
         else:
             argv += ["--url", str(url)]
             if filename:
@@ -842,7 +929,242 @@ def create_server(settings: Settings) -> Server:
             "Data is downloaded on the machine running the MCP server. "
             "For remote runs, copy/extract the data on the target host or use a shared mount."
         )
+        summary["dest_relative"] = _rel_to(s, dest_path)
+        summary["paths_relative_to"] = str(s.workspace)
+        if entry is not None:
+            rel_dir = _rel_to(s, dest_path)
+            if entry.kind == "xsdata" and entry.extract:
+                summary["use_in_input_hint"] = f'set acelib "{rel_dir}/data.xsdata"'
+            elif entry.kind == "decay":
+                setter = "set declib" if entry.filename.endswith(".dec") else "set nfylib"
+                summary["use_in_input_hint"] = f'{setter} "{rel_dir}/{entry.filename}"'
+            elif entry.kind == "photon" and entry.extract:
+                summary["use_in_input_hint"] = f'set pdatadir "{rel_dir}/photon_data"'
         return json.dumps(summary, indent=2, ensure_ascii=False)
+
+    @server.tool(
+        description=(
+            "Install photon transport data: downloads mcplib.xsdata and photon_data.tar.gz from "
+            "https://serpent.vtt.fi/repository/photon_data/ (background, resumable) and rewrites the "
+            "ACE path inside mcplib.xsdata relative to the workspace root. mcplib84 is usually "
+            "already present in the extracted xsdata tree (acedata/mcplib84) and is used in place; "
+            "it can also be provided via ace_file, ace_source (default <workspace>/photon_libraries) "
+            "or ace_url. Missing mcplib84 is reported explicitly."
+        )
+    )
+    def install_photon_data(
+        dest: str | None = None,
+        ace_source: str | None = None,
+        ace_file: str | None = None,
+        ace_url: str | None = None,
+    ) -> str:
+        s = app.settings
+        if dest:
+            dest_path = s.resolve(dest)
+        elif s.data_dirs:
+            dest_path = s.data_dirs[0]
+        else:
+            dest_path = s.workspace / "xsdata"
+        try:
+            _require_allowed(s, dest_path)
+        except ValueError as exc:
+            return str(exc)
+        dest_path.mkdir(parents=True, exist_ok=True)
+        source = s.resolve(ace_source) if ace_source else (s.workspace / "photon_libraries")
+        argv = [
+            sys.executable,
+            "-m",
+            "serpent2_mcp.runner.datadl",
+            "photon",
+            "--dest",
+            str(dest_path),
+            "--ace-source",
+            str(source),
+            "--rel-root",
+            str(s.workspace),
+            "--base-url",
+            s.data_repo,
+        ]
+        if ace_file:
+            candidate = s.resolve(ace_file)
+            if not candidate.is_file():
+                return f"ace_file not found: {candidate}"
+            argv += ["--ace-file", str(candidate)]
+        if ace_url:
+            argv += ["--ace-url", str(ace_url)]
+        job = app.jobs.start_local(
+            "download",
+            argv,
+            dest_path,
+            meta={
+                "library": "photon",
+                "dest": str(dest_path),
+                "dest_relative": _rel_to(s, dest_path),
+                "ace_source": str(source),
+            },
+        )
+        summary = _job_summary(job, app.jobs)
+        summary["paths_relative_to"] = str(s.workspace)
+        summary["note"] = (
+            "VTT files are downloaded automatically. mcplib84 is normally shipped inside the Serpent "
+            "xsdata packages as acedata/mcplib84 and is used in place; only if it is missing you need "
+            f"{datadl.CATALOG_BY_KEY['mcplib84'].homepage} or ace_file=/ace_url=. "
+            "Paths inside mcplib.xsdata are written relative to the workspace root (or set SERPENT_DATA). "
+            "Never publish LANL/RSICC data in a public repository."
+        )
+        return json.dumps(summary, indent=2, ensure_ascii=False)
+
+    @server.tool(
+        description=(
+            "Check (and by default repair) the data file paths inside *.xsdata directory files of a "
+            "data directory. VTT directory files reference data files under '/xs/data/'; this tool "
+            "finds each referenced file by name inside the directory (for example "
+            "xsdata/acedata/mcplib84), rewrites the entry and returns statistics. Paths are written "
+            "relative to the workspace root when possible. Use apply=false for a dry run. Reports "
+            "missing files so that incomplete data sets are visible immediately."
+        )
+    )
+    def check_data_paths(directory: str | None = None, apply: bool = True) -> str:
+        s = app.settings
+        target = s.resolve(directory) if directory else (s.data_dirs[0] if s.data_dirs else s.workspace / "xsdata")
+        try:
+            _require_allowed(s, target)
+        except ValueError as exc:
+            return str(exc)
+        if not target.is_dir():
+            return f"Directory not found: {target}"
+        stats = datadl.patch_xsdata_files(target, rel_root=str(s.workspace), apply=apply, log=stderr_log)
+        stats["paths_relative_to"] = str(s.workspace)
+        return json.dumps(stats, indent=2, ensure_ascii=False)
+
+    @server.tool(
+        description=(
+            "One-call data setup for a fresh machine: downloads and extracts a neutron data package "
+            "(neutron: endfb71|jeff32|jendl40|fendl30; decay and fission-yield data are included) "
+            "and the thermal scattering library (sss_thxs), patches every '/xs/data/' path inside "
+            "the extracted *.xsdata files to the local files (relative to the workspace root), "
+            "optionally installs photon physics data, and returns ready-to-paste "
+            "set acelib/declib/nfylib/pdatadir lines. Runs as a background job; the transfer is "
+            "6-8 GB, so follow it with job_status. The mcplib84 photon ACE file is LANL/RSICC data "
+            "and cannot be downloaded automatically: on a partial result see manual_download or "
+            "call mcplib84_instructions."
+        )
+    )
+    def setup_data(
+        neutron: str = "endfb71",
+        dest: str | None = None,
+        with_photon: bool = True,
+        with_thxs: bool = True,
+        ace_file: str | None = None,
+        ace_url: str | None = None,
+    ) -> str:
+        s = app.settings
+        if dest:
+            dest_path = s.resolve(dest)
+        elif s.data_dirs:
+            dest_path = s.data_dirs[0]
+        else:
+            dest_path = s.workspace / "xsdata"
+        try:
+            _require_allowed(s, dest_path)
+        except ValueError as exc:
+            return str(exc)
+        if datadl.find_entry(neutron) is None:
+            return f"Unknown neutron library '{neutron}'. Use endfb71, jeff32, jendl40 or fendl30."
+        dest_path.mkdir(parents=True, exist_ok=True)
+        argv = [
+            sys.executable,
+            "-m",
+            "serpent2_mcp.runner.datadl",
+            "setup",
+            "--neutron",
+            neutron,
+            "--dest",
+            str(dest_path),
+            "--rel-root",
+            str(s.workspace),
+            "--base-url",
+            s.data_repo,
+        ]
+        if not with_photon:
+            argv.append("--no-photon")
+        if not with_thxs:
+            argv.append("--no-thxs")
+        if ace_file:
+            candidate = s.resolve(ace_file)
+            if not candidate.is_file():
+                return f"ace_file not found: {candidate}"
+            argv += ["--ace-file", str(candidate)]
+        if ace_url:
+            argv += ["--ace-url", str(ace_url)]
+        job = app.jobs.start_local(
+            "download",
+            argv,
+            dest_path,
+            meta={"neutron": neutron, "dest": str(dest_path), "dest_relative": _rel_to(s, dest_path), "with_photon": with_photon},
+        )
+        summary = _job_summary(job, app.jobs)
+        summary["paths_relative_to"] = str(s.workspace)
+        summary["note"] = (
+            "Large download (6-8 GB); poll job_status. When finished, use the 'use_in_input' lines "
+            "from the job progress/output, or call get_environment. Paths are written relative to "
+            "the workspace root (where sss2 is started); alternatively set SERPENT_DATA."
+        )
+        return json.dumps(summary, indent=2, ensure_ascii=False)
+
+    @server.tool(
+        description=(
+            "Explain which data file still has to be downloaded manually and exactly where to put "
+            "it. Currently the only such file is mcplib84 (MCPLIB84 photon ACE data, LANL/RSICC "
+            "licensed, not redistributable). The tool checks whether the file is already present in "
+            "the data directory and returns the download URL, the exact target path, how to verify "
+            "the file and what to run next."
+        )
+    )
+    def mcplib84_instructions(dest: str | None = None) -> str:
+        s = app.settings
+        if dest:
+            dest_path = s.resolve(dest)
+        elif s.data_dirs:
+            dest_path = s.data_dirs[0]
+        else:
+            dest_path = s.workspace / "xsdata"
+        target = dest_path / "mcplib84"
+        alternative_dir = s.workspace / "photon_libraries"
+        found = datadl.find_ace_file(dest_path, extra_dirs=[alternative_dir])
+        alternative_dir = s.workspace / "photon_libraries"
+        payload: dict[str, Any] = {
+            "file": "mcplib84",
+            "description": "MCPLIB84 photon ACE cross sections (.84p), needed for photon transport only",
+            "why_manual": (
+                "It is LANL/RSICC data under US export-control/licensing terms and is not "
+                "redistributed with this server or by VTT."
+            ),
+            "download_url": datadl.CATALOG_BY_KEY["mcplib84"].homepage,
+            "place_file_at": _rel_to(s, target),
+            "absolute_path": str(target),
+            "alternative": {
+                "directory": _rel_to(s, alternative_dir),
+                "then": "re-run install_photon_data or setup_data",
+            },
+            "verify": "file starts with '  1000.84p' and is about 15 MB",
+            "then": "run check_data_paths (or install_photon_data) to wire it into the directory files",
+        }
+        if found is not None:
+            payload["status"] = "already present"
+            payload["found_at"] = str(found)
+            payload["message"] = (
+                "mcplib84 is already available; no manual download is needed. "
+                "Run check_data_paths to make sure the directory files point to it."
+            )
+        else:
+            payload["status"] = "missing"
+            payload["message"] = (
+                f"Download the file from {payload['download_url']} and save it as "
+                f"'{payload['place_file_at']}' (absolute: {target}). Then run "
+                "install_photon_data or check_data_paths again."
+            )
+        return json.dumps(payload, indent=2, ensure_ascii=False)
 
     # -- MCP resources (best effort; clients differ in support) ------------
 

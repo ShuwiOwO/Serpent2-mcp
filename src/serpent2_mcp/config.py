@@ -79,6 +79,7 @@ class Settings:
     jobs_dir: Path = field(default_factory=lambda: default_state_dir() / "jobs")
     cache_dir: Path = field(default_factory=default_cache_dir)
     docs_url: str = "https://serpent.vtt.fi/docs"
+    data_repo: str = "https://serpent.vtt.fi/repository"
     docs_auto_sync: bool = True
     docs_max_age_days: int = 30
     lang: str = "ru"
@@ -140,6 +141,7 @@ class Settings:
             "jobs_dir": str(self.jobs_dir),
             "cache_dir": str(self.cache_dir),
             "docs_url": self.docs_url,
+            "data_repo": self.data_repo,
             "lang": self.lang,
             "config_file": str(self.config_file) if self.config_file else None,
         }
@@ -366,6 +368,8 @@ def load_settings(workspace: str | Path | None = None) -> Settings:
         job_timeout=job_timeout,
         jobs_dir=jobs_dir,
         docs_url=os.environ.get("SERPENT_DOCS_URL") or docs_sec.get("base_url", "https://serpent.vtt.fi/docs"),
+        data_repo=os.environ.get("SERPENT_DATA_REPO_URL")
+        or sec.get("data_repo", "https://serpent.vtt.fi/repository"),
         docs_auto_sync=_bool(os.environ.get("SERPENT_DOCS_AUTO_SYNC"), _bool(docs_sec.get("auto_sync"), True)),
         docs_max_age_days=int(docs_sec.get("max_age_days", 30)),
         lang=(os.environ.get("SERPENT_LANG") or ui_sec.get("lang", "ru")).lower()[:2],
