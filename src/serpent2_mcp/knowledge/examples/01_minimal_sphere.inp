@@ -1,0 +1,17 @@
+set title "Minimal example: hydrogen sphere with external point source"
+
+% --- Surfaces and cells -----------------------------------------------
+surf world sph 0.0 0.0 0.0 1.0
+cell hydrogen 0 hydrogen -world
+cell outside  0 outside   world
+
+% --- Material: H-1 at 1e-3 g/cm3 (negative density = mass density) ---
+mat hydrogen -1.0e-3
+1001.03c 1.0
+
+% --- 1 MeV point source at the origin ---------------------------------
+src 1 sp 0 0 0 se 1.0
+set nps 10000
+
+% --- Data library (or set SERPENT_ACELIB / SERPENT_DATA) --------------
+set acelib "PATH/TO/data.xsdata"

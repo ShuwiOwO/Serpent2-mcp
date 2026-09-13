@@ -1,0 +1,21 @@
+set title "Sphere shielding with external 14.1 MeV source and mesh flux detector"
+
+% --- Geometry: iron shell around the source ----------------------------
+surf r_in  sph 0.0 0.0 0.0 5.0
+surf r_out sph 0.0 0.0 0.0 25.0
+cell core    0 iron    -r_in
+cell shield  0 iron    -r_out  r_in
+cell outside 0 outside  r_out
+
+mat iron -7.87
+26000.03c -1.0
+
+% --- 14.1 MeV point source ---------------------------------------------
+src 1 sp 0 0 0 se 14.1
+set nps 200000
+
+% --- Log-uniform 30-group energy grid and a Cartesian mesh detector ----
+ene egrid 3 30 1e-8 2e1
+det flux dx -25 25 50 dy -25 25 50 dz -25 25 50 de egrid
+
+set acelib "PATH/TO/data.xsdata"

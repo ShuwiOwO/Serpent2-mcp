@@ -1,0 +1,1974 @@
+{
+ "generated_at": "2026-09-13T12:41:14+0300",
+ "docs_version": "0.21.0",
+ "source_url": "https://serpent.vtt.fi/docs/syntax/index.html",
+ "count": 229,
+ "includes_doc_excerpts": false,
+ "cards": [
+  {
+   "name": "branch",
+   "kind": "card",
+   "syntax": "branch NAME [ var VNAME VAL ] [ repm MAT 1 MAT 2 ] [ repu UNI 1 UNI 2 ] [ stp MAT DENS T THERM 1 SABL 1 SABH 1 THERM 2 SABL 2 SABH 2 … ] [ tra UNIT TNAME ] [ xenon OPTX ] [ samarium OPTS ] [ norm F ] [ gcu UNI ] [ reptrc FILE 1 FILE 2 ] [ incl MODFILE ]",
+   "params": [
+    "var",
+    "repm",
+    "repu",
+    "stp",
+    "tra",
+    "xenon",
+    "samarium",
+    "norm",
+    "gcu",
+    "reptrc",
+    "incl"
+   ],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-branch"
+  },
+  {
+   "name": "casematrix",
+   "kind": "card",
+   "syntax": "casematrix CASE NHIS [ HB 1 HB 2 … ] NBU [ BU 1 BU 2 … ] NBR 1 [ BR 1,1 BR 1,2 … ] NBR 2 [ BR 2,1 BR 2,2 … ] …",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-casematrix"
+  },
+  {
+   "name": "cell",
+   "kind": "card",
+   "syntax": "cell NAME UNI 0 MAT [ SURF 1 SURF 2 … ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-cell"
+  },
+  {
+   "name": "coef",
+   "kind": "card",
+   "syntax": "coef NBU [ BU 1 BU 2 … ] NBR 1 [ BR 1,1 BR 1,2 … ] NBR 2 [ BR 2,1 BR 2,2 … ] …",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-coef"
+  },
+  {
+   "name": "datamesh",
+   "kind": "card",
+   "syntax": "datamesh NAME TYPE LC …",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-datamesh"
+  },
+  {
+   "name": "dep",
+   "kind": "card",
+   "syntax": "dep TYPE STP 1 STP 2 …",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-dep"
+  },
+  {
+   "name": "det",
+   "kind": "card",
+   "syntax": "det NAME [ PART ] [ dv VOL ] [ dt OPT … ] [ dhis TST ] [ da AMAT FLX ] [ dc CELL ] [ dm MAT ] [ du UNI ] [ dl LAT ] [ dtl TSURF ] [ dx XMIN XMAX NX ] [ dy YMIN YMAX NY ] [ dz ZMIN ZMAX NZ ] [ dn TYPE MIN 1 MAX 1 N 1 MIN 2 MAX 2 N 2 MIN 3 MAX 3 N 3 ] [ dn TYPE N 1 N 2 N 3 LIM 1,1 LIM 1,2 … LIM 2,1 LIM 2,2 … LIM 3,1 LIM 3,2 … ] [ dh TYPE X0 Y0 PITCH N 1 N 2 ZMIN ZMAX NZ ] [ dumsh UMSH NB CELL 0 BIN 0 CELL 1 BIN 1 … ] [ dmesh MESH ] [ ds SURF DIR ] [ dr MT RMAT ] [ de EGRID ] [ di TBIN ] [ df FILE FRAC ] [ dfl FLG FOPT ] [ dfet FTYPE … ] [ dphb PHB ]",
+   "params": [
+    "dv",
+    "dt",
+    "dhis",
+    "da",
+    "dc",
+    "dm",
+    "du",
+    "dl",
+    "dtl",
+    "dx",
+    "dy",
+    "dz",
+    "dn",
+    "dh",
+    "dumsh",
+    "dmesh",
+    "ds",
+    "dr",
+    "de",
+    "di",
+    "df",
+    "dfl",
+    "dfet",
+    "dphb"
+   ],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-det"
+  },
+  {
+   "name": "div",
+   "kind": "card",
+   "syntax": "div MAT [ sep LVL ] [ subx NX XMIN XMAX ] [ subx NX X 1 X 2 … X NX+1 ] [ suby NY YMIN YMAX ] [ suby NY Y 1 Y 2 … Y NY+1 ] [ subz NZ ZMIN ZMAX ] [ subz NZ Z 1 Z 2 … Z NZ+1 ] [ subr NR RMIN RMAX ] [ subr NR R 1 R 2 … R NR+1 ] [ subs NS S0 ] [ subs NS S 1 S 2 … S NS+1 ] [ peb PBU NU U 1 U 2 … U NU+1 ] [ lims OPT ]",
+   "params": [
+    "sep",
+    "subx",
+    "suby",
+    "subz",
+    "subr",
+    "subs",
+    "peb",
+    "lims"
+   ],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-div"
+  },
+  {
+   "name": "dtrans",
+   "kind": "card",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-dtrans"
+  },
+  {
+   "name": "ene",
+   "kind": "card",
+   "syntax": "ene NAME TYPE E 1 E 2 …",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-ene"
+  },
+  {
+   "name": "ftrans",
+   "kind": "card",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-ftrans"
+  },
+  {
+   "name": "fun",
+   "kind": "card",
+   "syntax": "fun TYPE INTT X 1 F 1 X 2 F 2 …",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-fun"
+  },
+  {
+   "name": "gplot",
+   "kind": "card",
+   "syntax": "gplot [ name NAME ] [ file “ FNAME ” ] [ pix NX NY ] [ pixw NX ] [ pixh NY ] [ ax AX ] [ pos POS ] [ box MIN 1 MAX 1 MIN 2 MAX 2 ] [ bou BN ] [ imp ITYPE LOG IMIN IMAX E WWB ] [ dis DTYPE ] [ qp OPT ] [ hl HTYPE ID DUMMY ] [ trk WDTH R G B OPC ]",
+   "params": [
+    "name",
+    "file",
+    "pix",
+    "pixw",
+    "pixh",
+    "ax",
+    "pos",
+    "box",
+    "bou",
+    "imp",
+    "dis",
+    "qp",
+    "hl",
+    "trk"
+   ],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-gplot"
+  },
+  {
+   "name": "hisv",
+   "kind": "card",
+   "syntax": "hisv BU 1 NV 1 BR 1,1 BR 1,2 … BU 2 NV 2 BR 2,1 BR 2,2 … …",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-hisv"
+  },
+  {
+   "name": "ifc",
+   "kind": "card",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-ifc"
+  },
+  {
+   "name": "include",
+   "kind": "card",
+   "syntax": "include “ FILE ”",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-include"
+  },
+  {
+   "name": "lat",
+   "kind": "card",
+   "syntax": "lat UNI 0 TYPE X 0 Y 0 N x N y PITCH UNI 1 UNI 2 …",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-lat"
+  },
+  {
+   "name": "mat",
+   "kind": "card",
+   "syntax": "mat NAME DENS [ moder THNAME ZA ] [ burn 1 ] [ vol V ] [ mass M ] [ tmp T ] [ tms T ] [ tft T min T max ] [ rgb R G B ] [ fix ID 0 T 0 ] ZAID 1 FRAC 1 ZAID 2 FRAC 2 …",
+   "params": [
+    "moder",
+    "burn",
+    "vol",
+    "mass",
+    "tmp",
+    "tms",
+    "tft",
+    "rgb",
+    "fix"
+   ],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-mat"
+  },
+  {
+   "name": "mesh",
+   "kind": "card",
+   "syntax": "mesh AX N x N y [ SYM MIN x MAX x MIN y MAX y MIN z MAX z ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-mesh"
+  },
+  {
+   "name": "mflow",
+   "kind": "card",
+   "syntax": "mflow MFL NUC 1 C 1 NUC 2 C 2 …",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-mflow"
+  },
+  {
+   "name": "mix",
+   "kind": "card",
+   "syntax": "mix NAME [ vol V ] [ mass M ] [ rgb R G B ] MAT 1 FRAC 1 MAT 2 FRAC 2 …",
+   "params": [
+    "vol",
+    "mass",
+    "rgb"
+   ],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-mix"
+  },
+  {
+   "name": "mplot",
+   "kind": "card",
+   "syntax": "mplot NAME [ file “ FNAME ” ] [ ax AX ] [ pix N x N y ] [ pixw N x ] [ pixh N y ] [ sym SYM ] [ dimx MIN x MAX x ] [ dimy MIN y MAX y ] [ dimz MIN z MAX z ] [ dimr MIN r MAX r ] [ dimh MIN h MAX h ] [ dsc DET CMAP ] [ lim F min F max ]",
+   "params": [
+    "file",
+    "ax",
+    "pix",
+    "pixw",
+    "pixh",
+    "sym",
+    "dimx",
+    "dimy",
+    "dimz",
+    "dimr",
+    "dimh",
+    "dsc",
+    "lim"
+   ],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-mplot"
+  },
+  {
+   "name": "nest",
+   "kind": "card",
+   "syntax": "nest UNI 0 TYPE [ MAT 1 R 1 ] [ MAT 2 R 2 ] … [ MAT N ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-nest"
+  },
+  {
+   "name": "particle",
+   "kind": "card",
+   "syntax": "particle UNI 0 [ MAT 1 R 1 ] [ MAT 2 R 2 ] … [ MAT N ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-particle"
+  },
+  {
+   "name": "pbed",
+   "kind": "card",
+   "syntax": "pbed UNI 0 BGU “ FILE ” [ pow ]",
+   "params": [
+    "pow"
+   ],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-pbed"
+  },
+  {
+   "name": "phb",
+   "kind": "card",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-phb"
+  },
+  {
+   "name": "pin",
+   "kind": "card",
+   "syntax": "pin UNI 0 [ MAT 1 R 1 ] [ MAT 2 R 2 ] … [ MAT N ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-pin"
+  },
+  {
+   "name": "plot",
+   "kind": "card",
+   "syntax": "plot AX N x N y [ POS MIN 1 MAX 1 MIN 2 MAX 2 ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-plot"
+  },
+  {
+   "name": "rep",
+   "kind": "card",
+   "syntax": "rep RNAME rc SRC TGT MFL MODE rm MAT1 MAT2 ru UNI1 UNI2",
+   "params": [
+    "rc",
+    "rm",
+    "ru"
+   ],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-rep"
+  },
+  {
+   "name": "sample",
+   "kind": "card",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-sample"
+  },
+  {
+   "name": "sens",
+   "kind": "card",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-sens"
+  },
+  {
+   "name": "set",
+   "kind": "card",
+   "syntax": "set OPT [ … ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set"
+  },
+  {
+   "name": "solid",
+   "kind": "card",
+   "syntax": "solid TYPE UNI 0 BGU SPLIT N SZ 1 SZ 2 … SZ N “ POINTS ” “ FACES ” “ OWNER ” “ NEIGHBOUR ” “ MATERIALS ”",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-solid"
+  },
+  {
+   "name": "src",
+   "kind": "card",
+   "syntax": "src NAME [ PART ] [ sw WGT ] [ sc CELL ] [ sm MAT ] [ su UNI ] [ ss SURF ] [ sp X Y Z ] [ sx XMIN XMAX ] [ sy YMIN YMAX ] [ sz ZMIN ZMAX ] [ srad RMIN RMAX ] [ sd U V W ] [ sa PHI ] [ se E ] [ sb NE INTT E 1 F 1 E 2 F 2 … ] [ sr NUC MT ] [ st TMIN TMAX ] [ sf “ FILE ” TYPE ] [ so OP OD OE OW OT ] [ si NA ARG 1 ARG 2 … ] [ sg DMAT MODE ]",
+   "params": [
+    "sw",
+    "sc",
+    "sm",
+    "su",
+    "ss",
+    "sp",
+    "sx",
+    "sy",
+    "sz",
+    "srad",
+    "sd",
+    "sa",
+    "se",
+    "sb",
+    "sr",
+    "st",
+    "sf",
+    "so",
+    "si",
+    "sg"
+   ],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-src"
+  },
+  {
+   "name": "strans",
+   "kind": "card",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-strans"
+  },
+  {
+   "name": "surf",
+   "kind": "card",
+   "syntax": "surf NAME TYPE [ PARAM 1 PARAM 2 … ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-surf"
+  },
+  {
+   "name": "therm",
+   "kind": "card",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-therm"
+  },
+  {
+   "name": "thermstoch",
+   "kind": "card",
+   "syntax": "therm THNAME LIB",
+   "params": [
+    "therm"
+   ],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-thermstoch"
+  },
+  {
+   "name": "tme",
+   "kind": "card",
+   "syntax": "tme NAME TYPE T 1 T 2 …",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-tme"
+  },
+  {
+   "name": "trans",
+   "kind": "card",
+   "syntax": "trans TYPE UNIT [ IDX X Y Z \\(\\theta\\) x \\(\\theta\\) y \\(\\theta\\) z ORD ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-trans"
+  },
+  {
+   "name": "transa",
+   "kind": "card",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-transa"
+  },
+  {
+   "name": "transb",
+   "kind": "card",
+   "syntax": "transb BU TYPE UNIT [ … ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-transb"
+  },
+  {
+   "name": "transv",
+   "kind": "card",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-transv"
+  },
+  {
+   "name": "umsh",
+   "kind": "card",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-umsh"
+  },
+  {
+   "name": "utrans",
+   "kind": "card",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-utrans"
+  },
+  {
+   "name": "voro",
+   "kind": "card",
+   "syntax": "voro UNI 0 BGU R “ FILE ” [ NP UNI 1 VF 1 UNI 2 VF 2 … ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-voro"
+  },
+  {
+   "name": "wwgen",
+   "kind": "card",
+   "syntax": "wwgen NAME LIM NI MOD ERG MSH MIN 1 MAX 1 SZ 1 MIN 2 MAX 2 SZ 2 MIN 3 MAX 3 SZ 3 DET 1 W 1 [ DET 2 W 2 … ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-wwgen"
+  },
+  {
+   "name": "wwin",
+   "kind": "card",
+   "syntax": "wwin NAME [ wf FILE FMT ] [ wn I0 X Y Z E ] [ wx C G ] [ wt SB BND MIN MAX ] [ wi ITP NI WWG 1 DF 1 WWG 2 DF 2 … ] [ wi ITP NI WWG NX NY NZ NL NTRK ISPL NSPL DSPL 1 SX 1 SY 1 SZ 1 … ]",
+   "params": [
+    "wf",
+    "wn",
+    "wx",
+    "wt",
+    "wi"
+   ],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-wwin"
+  },
+  {
+   "name": "absrate",
+   "kind": "set",
+   "syntax": "set absrate ABS [ MAT ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-absrate"
+  },
+  {
+   "name": "acelib",
+   "kind": "set",
+   "syntax": "set acelib “ LIB 1 ” [ “ LIB 2 ” “ LIB 3 ” … ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-acelib"
+  },
+  {
+   "name": "acti",
+   "kind": "set",
+   "syntax": "set acti ZAI A",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-acti"
+  },
+  {
+   "name": "adf",
+   "kind": "set",
+   "syntax": "set adf UNI SURF SYM [ DFS ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-adf"
+  },
+  {
+   "name": "adfseg",
+   "kind": "set",
+   "syntax": "set adfseg CW [ MW ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-adfseg"
+  },
+  {
+   "name": "alb",
+   "kind": "set",
+   "syntax": "set alb UNI SURF DIR",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-alb"
+  },
+  {
+   "name": "arr",
+   "kind": "set",
+   "syntax": "set arr MODEN [ MODEG ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-arr"
+  },
+  {
+   "name": "ba",
+   "kind": "set",
+   "syntax": "set ba ZAI 1 ZAI 2 …",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-ba"
+  },
+  {
+   "name": "bala",
+   "kind": "set",
+   "syntax": "set bala OPT",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-bala"
+  },
+  {
+   "name": "bc",
+   "kind": "set",
+   "syntax": "set bc MODE [ ALB ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-bc"
+  },
+  {
+   "name": "blockdt",
+   "kind": "set",
+   "syntax": "set blockdt MAT 1 MAT 2 …",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-blockdt"
+  },
+  {
+   "name": "bralib",
+   "kind": "set",
+   "syntax": "set bralib “ LIB 1 ” [ “ LIB 2 ” “ LIB 3 ” … ] [ OPT ZAI 1 ZAI 2 … ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-bralib"
+  },
+  {
+   "name": "branchless",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-branchless"
+  },
+  {
+   "name": "braopt",
+   "kind": "set",
+   "syntax": "set braopt SPEC",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-braopt"
+  },
+  {
+   "name": "bumode",
+   "kind": "set",
+   "syntax": "set bumode SOLV [ ORD SSD ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-bumode"
+  },
+  {
+   "name": "bunorm",
+   "kind": "set",
+   "syntax": "set bunorm OPT",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-bunorm"
+  },
+  {
+   "name": "ccmaxiter",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-ccmaxiter"
+  },
+  {
+   "name": "ccmaxpop",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-ccmaxpop"
+  },
+  {
+   "name": "cdop",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-cdop"
+  },
+  {
+   "name": "cea",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-cea"
+  },
+  {
+   "name": "cfe",
+   "kind": "set",
+   "syntax": "set cfe LN [ TN LP TP ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-cfe"
+  },
+  {
+   "name": "cmap",
+   "kind": "set",
+   "syntax": "set cmap ID R 1 G 1 B 1 R 2 G 2 B 2 …",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-cmap"
+  },
+  {
+   "name": "cmm",
+   "kind": "set",
+   "syntax": "set cmm OPT",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-cmm"
+  },
+  {
+   "name": "coefpara",
+   "kind": "set",
+   "syntax": "set coefpara FMT [ PARAM 1 PARAM 2 … ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-coefpara"
+  },
+  {
+   "name": "combing",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-combing"
+  },
+  {
+   "name": "comfile",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-comfile"
+  },
+  {
+   "name": "confi",
+   "kind": "set",
+   "syntax": "set confi OPT",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-confi"
+  },
+  {
+   "name": "coverxlib",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-coverxlib"
+  },
+  {
+   "name": "covlib",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-covlib"
+  },
+  {
+   "name": "cpd",
+   "kind": "set",
+   "syntax": "set cpd D [ NZ ZMIN ZMAX LVL1 LVL2 ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-cpd"
+  },
+  {
+   "name": "cpop",
+   "kind": "set",
+   "syntax": "set cpop NPG NGEN NSKIP",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-cpop"
+  },
+  {
+   "name": "csw",
+   "kind": "set",
+   "syntax": "set csw “ FILE ” [ P ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-csw"
+  },
+  {
+   "name": "dataout",
+   "kind": "set",
+   "syntax": "set dataout OPT1 [ OPT2 OPT3 OPT4 OPT5 OPT6 ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-dataout"
+  },
+  {
+   "name": "dbrc",
+   "kind": "set",
+   "syntax": "set dbrc EMIN EMAX NUC 1 NUC 2 …",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-dbrc"
+  },
+  {
+   "name": "dd",
+   "kind": "set",
+   "syntax": "set dd MODE [ X0 Y0 ANG ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-dd"
+  },
+  {
+   "name": "deccut",
+   "kind": "set",
+   "syntax": "set deccut LIM",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-deccut"
+  },
+  {
+   "name": "declib",
+   "kind": "set",
+   "syntax": "set declib “ LIB 1 ” [ “ LIB 2 ” “ LIB 3 ” … ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-declib"
+  },
+  {
+   "name": "decomp",
+   "kind": "set",
+   "syntax": "set decomp OPT [ ELEM 1 ELEM 2 … ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-decomp"
+  },
+  {
+   "name": "delnu",
+   "kind": "set",
+   "syntax": "set delnu OPT",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-delnu"
+  },
+  {
+   "name": "densf",
+   "kind": "set",
+   "syntax": "set densf F",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-densf"
+  },
+  {
+   "name": "depmtx",
+   "kind": "set",
+   "syntax": "set depmtx OPT",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-depmtx"
+  },
+  {
+   "name": "depout",
+   "kind": "set",
+   "syntax": "set depout OPTM [ OPTS ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-depout"
+  },
+  {
+   "name": "deppara",
+   "kind": "set",
+   "syntax": "set deppara PARAM 1 PARAM 2 …",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-deppara"
+  },
+  {
+   "name": "depstepbunorm",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-depstepbunorm"
+  },
+  {
+   "name": "dfsol",
+   "kind": "set",
+   "syntax": "set dfsol BC [ DC NP ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-dfsol"
+  },
+  {
+   "name": "dhpow",
+   "kind": "set",
+   "syntax": "set dhpow OPT",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-dhpow"
+  },
+  {
+   "name": "dix",
+   "kind": "set",
+   "syntax": "set dix OPT",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-dix"
+  },
+  {
+   "name": "dspec",
+   "kind": "set",
+   "syntax": "set dspec EGRP EGRN",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-dspec"
+  },
+  {
+   "name": "dt",
+   "kind": "set",
+   "syntax": "set dt NTRSH [ PTRSH ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-dt"
+  },
+  {
+   "name": "dynccfile",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-dynccfile"
+  },
+  {
+   "name": "dynsrc",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-dynsrc"
+  },
+  {
+   "name": "ecut",
+   "kind": "set",
+   "syntax": "set ecut EMIN n [ EMIN p ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-ecut"
+  },
+  {
+   "name": "ecutdens",
+   "kind": "set",
+   "syntax": "set ecutdens DENS 1 EMIN 1 [ DENS 2 EMIN 2 … ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-ecutdens"
+  },
+  {
+   "name": "ecutmat",
+   "kind": "set",
+   "syntax": "set ecutmat MAT 1 EMIN 1 [ MAT 2 EMIN 2 … ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-ecutmat"
+  },
+  {
+   "name": "eddi",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-eddi"
+  },
+  {
+   "name": "edepdel",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-edepdel"
+  },
+  {
+   "name": "edepkcorr",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-edepkcorr"
+  },
+  {
+   "name": "edepmode",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-edepmode"
+  },
+  {
+   "name": "egrid",
+   "kind": "set",
+   "syntax": "set egrid TOL [ EMIN EMAX ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-egrid"
+  },
+  {
+   "name": "ekn",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-ekn"
+  },
+  {
+   "name": "elcond",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-elcond"
+  },
+  {
+   "name": "elgas",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-elgas"
+  },
+  {
+   "name": "elmee",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-elmee"
+  },
+  {
+   "name": "elspe",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-elspe"
+  },
+  {
+   "name": "elspn",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-elspn"
+  },
+  {
+   "name": "endburn",
+   "kind": "set",
+   "syntax": "set endburn KMIN KMAX",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-endburn"
+  },
+  {
+   "name": "entr",
+   "kind": "set",
+   "syntax": "set entr NX NY NZ [ XMIN XMAX YMIN YMAX ZMIN ZMAX ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-entr"
+  },
+  {
+   "name": "fallback",
+   "kind": "set",
+   "syntax": "set fallback “ OPT 1 ” [ “ OPT 2 ” … ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-fallback"
+  },
+  {
+   "name": "fg",
+   "kind": "set",
+   "syntax": "set fg E max",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-fg"
+  },
+  {
+   "name": "fissh",
+   "kind": "set",
+   "syntax": "set fissh ZAI 1 H 1 ZAI 2 H 2 …",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-fissh"
+  },
+  {
+   "name": "fissrate",
+   "kind": "set",
+   "syntax": "set fissrate FISS [ MAT ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-fissrate"
+  },
+  {
+   "name": "fissye",
+   "kind": "set",
+   "syntax": "set fissye INTT",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-fissye"
+  },
+  {
+   "name": "flux",
+   "kind": "set",
+   "syntax": "set flux FLX [ MAT ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-flux"
+  },
+  {
+   "name": "fluxlimtrc",
+   "kind": "set",
+   "syntax": "set fluxlimtrc OPT",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-fluxlimtrc"
+  },
+  {
+   "name": "fmtx",
+   "kind": "set",
+   "syntax": "set fmtx MODE MAT 1 MAT 2 …",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-fmtx"
+  },
+  {
+   "name": "forcedt",
+   "kind": "set",
+   "syntax": "set forcedt MAT 1 MAT 2 …",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-forcedt"
+  },
+  {
+   "name": "fpcut",
+   "kind": "set",
+   "syntax": "set fpcut LIM",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-fpcut"
+  },
+  {
+   "name": "fsp",
+   "kind": "set",
+   "syntax": "set fsp OPT NSKIP",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-fsp"
+  },
+  {
+   "name": "fum",
+   "kind": "set",
+   "syntax": "set fum ERG [ BTCH MODE LIM TGT ITER INIT ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-fum"
+  },
+  {
+   "name": "gbuf",
+   "kind": "set",
+   "syntax": "set gbuf F [ BNK ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-gbuf"
+  },
+  {
+   "name": "gct",
+   "kind": "set",
+   "syntax": "set gct OPT",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-gct"
+  },
+  {
+   "name": "gcu",
+   "kind": "set",
+   "syntax": "set gcu UNI 1 [ UNI 2 UNI 3 … ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-gcu"
+  },
+  {
+   "name": "gcut",
+   "kind": "set",
+   "syntax": "set gcut GMAX",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-gcut"
+  },
+  {
+   "name": "genrate",
+   "kind": "set",
+   "syntax": "set genrate FNG [ MAT ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-genrate"
+  },
+  {
+   "name": "gpop",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-gpop"
+  },
+  {
+   "name": "gsw",
+   "kind": "set",
+   "syntax": "set gsw “ FILE ” [ OPT P ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-gsw"
+  },
+  {
+   "name": "his",
+   "kind": "set",
+   "syntax": "set his OPT",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-his"
+  },
+  {
+   "name": "ifp",
+   "kind": "set",
+   "syntax": "set ifp GEN",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-ifp"
+  },
+  {
+   "name": "imp",
+   "kind": "set",
+   "syntax": "set imp TYPE CELL 1 I 1 CELL 2 I 2 …",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-imp"
+  },
+  {
+   "name": "impl",
+   "kind": "set",
+   "syntax": "set impl IC [ INXN INU ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-impl"
+  },
+  {
+   "name": "inftrk",
+   "kind": "set",
+   "syntax": "set inftrk NN [ FN NP FP ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-inftrk"
+  },
+  {
+   "name": "inventory",
+   "kind": "set",
+   "syntax": "set inventory [ ID 1 ID 2 … ] [ top N PARA ]",
+   "params": [
+    "top"
+   ],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-inventory"
+  },
+  {
+   "name": "isobra",
+   "kind": "set",
+   "syntax": "set isobra ZAI 1 MT 1 FG 1 [ FM 1 FN 1 … ] ZAI 2 MT 2 FG 2 [ FM 2 FN 2 … ] …",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-isobra"
+  },
+  {
+   "name": "iter",
+   "kind": "set",
+   "syntax": "set iter nuc NCYC KEFF N ZAI 1 ZAI 2 … ZAI N [ M MAT 1 MAT 2 … MAT M ]",
+   "params": [
+    "nuc"
+   ],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-iter"
+  },
+  {
+   "name": "keff",
+   "kind": "set",
+   "syntax": "set keff KEFF",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-keff"
+  },
+  {
+   "name": "lossrate",
+   "kind": "set",
+   "syntax": "set lossrate L",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-lossrate"
+  },
+  {
+   "name": "lost",
+   "kind": "set",
+   "syntax": "set lost LIM",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-lost"
+  },
+  {
+   "name": "maxsplit",
+   "kind": "set",
+   "syntax": "set maxsplit NMAX PMIN",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-maxsplit"
+  },
+  {
+   "name": "mbtch",
+   "kind": "set",
+   "syntax": "set mbtch N",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-mbtch"
+  },
+  {
+   "name": "mcvol",
+   "kind": "set",
+   "syntax": "set mcvol NP [ DENS ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-mcvol"
+  },
+  {
+   "name": "mdep",
+   "kind": "set",
+   "syntax": "set mdep UNI VOL NMAT MAT 1 MAT 2 … ZAI 1 MT 1 ZAI 2 MT 2 …",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-mdep"
+  },
+  {
+   "name": "memfrac",
+   "kind": "set",
+   "syntax": "set memfrac F",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-memfrac"
+  },
+  {
+   "name": "mfpcut",
+   "kind": "set",
+   "syntax": "set mfpcut LMIN",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-mfpcut"
+  },
+  {
+   "name": "mfpcutdens",
+   "kind": "set",
+   "syntax": "set mfpcutdens DENS 1 LMIN 1 [ DENS 2 LMIN 2 … ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-mfpcutdens"
+  },
+  {
+   "name": "mfpcutmat",
+   "kind": "set",
+   "syntax": "set mfpcutmat MAT 1 LMIN 1 [ MAT 2 LMIN 2 … ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-mfpcutmat"
+  },
+  {
+   "name": "micro",
+   "kind": "set",
+   "syntax": "set micro ERG [ BTCH ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-micro"
+  },
+  {
+   "name": "multilevelgcu",
+   "kind": "set",
+   "syntax": "set multilevelgcu OPT",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-multilevelgcu"
+  },
+  {
+   "name": "mvol",
+   "kind": "set",
+   "syntax": "set mvol MAT 1 ZIDX 1,1 VOL 1,1 MAT 1 ZIDX 1,2 VOL 1,2 … MAT 2 ZIDX 2,1 VOL 2,1 …",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-mvol"
+  },
+  {
+   "name": "nbuf",
+   "kind": "set",
+   "syntax": "set nbuf F [ BNK ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-nbuf"
+  },
+  {
+   "name": "nfg",
+   "kind": "set",
+   "syntax": "set nfg ERG",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-nfg"
+  },
+  {
+   "name": "nfylib",
+   "kind": "set",
+   "syntax": "set nfylib “ LIB 1 ” [ “ LIB 2 ” “ LIB 3 ” … ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-nfylib"
+  },
+  {
+   "name": "ngamma",
+   "kind": "set",
+   "syntax": "set ngamma MODE [ WMIN NMAX ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-ngamma"
+  },
+  {
+   "name": "nosep",
+   "kind": "set",
+   "syntax": "set nosep LVL 1 [ LVL 2 LVL 3 … ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-nosep"
+  },
+  {
+   "name": "nphys",
+   "kind": "set",
+   "syntax": "set nphys FISS [ CAPT SCATT ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-nphys"
+  },
+  {
+   "name": "nps",
+   "kind": "set",
+   "syntax": "set nps NP [ BTCH TBI ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-nps"
+  },
+  {
+   "name": "opti",
+   "kind": "set",
+   "syntax": "set opti MODE",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-opti"
+  },
+  {
+   "name": "outp",
+   "kind": "set",
+   "syntax": "set outp NB",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-outp"
+  },
+  {
+   "name": "pbuf",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-pbuf"
+  },
+  {
+   "name": "pcc",
+   "kind": "set",
+   "syntax": "set pcc MODE [ SSP SSC ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-pcc"
+  },
+  {
+   "name": "pdatadir",
+   "kind": "set",
+   "syntax": "set pdatadir “ DIR ”",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-pdatadir"
+  },
+  {
+   "name": "poi",
+   "kind": "set",
+   "syntax": "set poi OPT VOL [ XE135M ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-poi"
+  },
+  {
+   "name": "pop",
+   "kind": "set",
+   "syntax": "set pop NPG NGEN NSKIP [ K0 BTCH NCRIT ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-pop"
+  },
+  {
+   "name": "powdens",
+   "kind": "set",
+   "syntax": "set powdens PDE [ MAT ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-powdens"
+  },
+  {
+   "name": "power",
+   "kind": "set",
+   "syntax": "set power POW [ MAT ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-power"
+  },
+  {
+   "name": "ppid",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-ppid"
+  },
+  {
+   "name": "pport",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-pport"
+  },
+  {
+   "name": "ppw",
+   "kind": "set",
+   "syntax": "set ppw UNI LAT",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-ppw"
+  },
+  {
+   "name": "precsrcf",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-precsrcf"
+  },
+  {
+   "name": "precthresh",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-precthresh"
+  },
+  {
+   "name": "printelsp",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-printelsp"
+  },
+  {
+   "name": "printm",
+   "kind": "set",
+   "syntax": "set printm OPT [ FLIM ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-printm"
+  },
+  {
+   "name": "qparam",
+   "kind": "set",
+   "syntax": "set qparam QTMS QDBRC",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-qparam"
+  },
+  {
+   "name": "qparam_dbrc",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-qparam-dbrc"
+  },
+  {
+   "name": "qparam_tms",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-qparam-tms"
+  },
+  {
+   "name": "radiotox",
+   "kind": "set",
+   "syntax": "set radiotox ZAI 1 ING 1 INH 1 ZAI 2 ING 2 INH 2 …",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-radiotox"
+  },
+  {
+   "name": "relfactor",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-relfactor"
+  },
+  {
+   "name": "repro",
+   "kind": "set",
+   "syntax": "set repro MODE",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-repro"
+  },
+  {
+   "name": "rfr",
+   "kind": "set",
+   "syntax": "set rfr STEP FILE [ NFILE ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-rfr"
+  },
+  {
+   "name": "rfw",
+   "kind": "set",
+   "syntax": "set rfw OPT [ “ FILE ” ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-rfw"
+  },
+  {
+   "name": "rnddec",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-rnddec"
+  },
+  {
+   "name": "rng",
+   "kind": "set",
+   "syntax": "set rng STRD",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-rng"
+  },
+  {
+   "name": "root",
+   "kind": "set",
+   "syntax": "set root UNI",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-root"
+  },
+  {
+   "name": "roulette",
+   "kind": "set",
+   "syntax": "set roulette W0 P",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-roulette"
+  },
+  {
+   "name": "runtme",
+   "kind": "set",
+   "syntax": "set runtme TMAX",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-runtme"
+  },
+  {
+   "name": "samarium",
+   "kind": "set",
+   "syntax": "set samarium OPT [ MAT 1 MAT 2 … ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-samarium"
+  },
+  {
+   "name": "savesrc",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-savesrc"
+  },
+  {
+   "name": "sca",
+   "kind": "set",
+   "syntax": "set sca NI NB MSH MIN 1 MAX 1 SZ 1 MIN 2 MAX 2 SZ 2 MIN 3 MAX 3 SZ 3 [ SUB 1 SUB 2 SUB 3 LIM1 LIM2 ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-sca"
+  },
+  {
+   "name": "seed",
+   "kind": "set",
+   "syntax": "set seed X0 [ NB ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-seed"
+  },
+  {
+   "name": "sfbuf",
+   "kind": "set",
+   "syntax": "set sfbuf SZ",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-sfbuf"
+  },
+  {
+   "name": "sfrate",
+   "kind": "set",
+   "syntax": "set sfrate DUMMY",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-sfrate"
+  },
+  {
+   "name": "sfylib",
+   "kind": "set",
+   "syntax": "set sfylib “ LIB 1 ” [ “ LIB 2 ” “ LIB 3 ” … ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-sfylib"
+  },
+  {
+   "name": "shbuf",
+   "kind": "set",
+   "syntax": "set shbuf OPT1 OPT2 N",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-shbuf"
+  },
+  {
+   "name": "sie",
+   "kind": "set",
+   "syntax": "set sie IMAX",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-sie"
+  },
+  {
+   "name": "sourcescale",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-sourcescale"
+  },
+  {
+   "name": "spa",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-spa"
+  },
+  {
+   "name": "spd",
+   "kind": "set",
+   "syntax": "set spd V n [ V p ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-spd"
+  },
+  {
+   "name": "srcrate",
+   "kind": "set",
+   "syntax": "set srcrate SRC",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-srcrate"
+  },
+  {
+   "name": "stl",
+   "kind": "set",
+   "syntax": "set stl EXD NT",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-stl"
+  },
+  {
+   "name": "stlfile",
+   "kind": "set",
+   "syntax": "set stlfile OPT",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-stlfile"
+  },
+  {
+   "name": "syscom",
+   "kind": "set",
+   "syntax": "set syscom PT “ COMMAND ”",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-syscom"
+  },
+  {
+   "name": "tcut",
+   "kind": "set",
+   "syntax": "set tcut T max",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-tcut"
+  },
+  {
+   "name": "title",
+   "kind": "set",
+   "syntax": "set title “ NAME ”",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-title"
+  },
+  {
+   "name": "tpa",
+   "kind": "set",
+   "syntax": "set tpa T min T max L NF BNK",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-tpa"
+  },
+  {
+   "name": "transmurea",
+   "kind": "set",
+   "syntax": "set transmurea ZAI 1 MT 1 ZAI 2 MT 2 …",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-transmurea"
+  },
+  {
+   "name": "transnorm",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-transnorm"
+  },
+  {
+   "name": "transtime",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-transtime"
+  },
+  {
+   "name": "trc",
+   "kind": "set",
+   "syntax": "set trc MAT “ FILE ” E min [ ZAI 1 ZAI 2 … ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-trc"
+  },
+  {
+   "name": "trkline",
+   "kind": "set",
+   "syntax": "set trkline WDTH [ R G B OPC ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-trkline"
+  },
+  {
+   "name": "ttacut",
+   "kind": "set",
+   "syntax": "set ttacut F",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-ttacut"
+  },
+  {
+   "name": "ttb",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-ttb"
+  },
+  {
+   "name": "ttbpm",
+   "kind": "set",
+   "syntax": "",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-ttbpm"
+  },
+  {
+   "name": "u235h",
+   "kind": "set",
+   "syntax": "set U235H H",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-u235h"
+  },
+  {
+   "name": "ufs",
+   "kind": "set",
+   "syntax": "set ufs MODE ORD NX XMIN XMAX NY YMIN YMAX NZ ZMIN ZMAX",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-ufs"
+  },
+  {
+   "name": "ures",
+   "kind": "set",
+   "syntax": "set ures USE [ dilu D bala OPT otf MOD int LAW ] [ ZAID 1 ZAID 2 … ]",
+   "params": [
+    "dilu",
+    "bala",
+    "otf",
+    "int"
+   ],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-ures"
+  },
+  {
+   "name": "usym",
+   "kind": "set",
+   "syntax": "set usym UNI AX BC X 0 Y 0 \\(\\theta\\) 0 \\(\\theta\\) w [ OPT ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-usym"
+  },
+  {
+   "name": "wie",
+   "kind": "set",
+   "syntax": "set wie F",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-wie"
+  },
+  {
+   "name": "wrnout",
+   "kind": "set",
+   "syntax": "set wrnout OPT [ NMAX ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-wrnout"
+  },
+  {
+   "name": "wwb",
+   "kind": "set",
+   "syntax": "set wwb LB UB [ F ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-wwb"
+  },
+  {
+   "name": "xenon",
+   "kind": "set",
+   "syntax": "set xenon OPT [ MAT 1 MAT 2 … ]",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-xenon"
+  },
+  {
+   "name": "xscalc",
+   "kind": "set",
+   "syntax": "set xscalc OPT",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-xscalc"
+  },
+  {
+   "name": "xsplot",
+   "kind": "set",
+   "syntax": "set xsplot NP EMIN EMAX",
+   "params": [],
+   "notes": "",
+   "url": "https://serpent.vtt.fi/docs/syntax/index.html#syntax-set-xsplot"
+  }
+ ]
+}

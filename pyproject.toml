@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "serpent2-mcp"
+version = "0.1.0"
+description = "MCP server for the Serpent 2 Monte Carlo particle transport code"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "ShuwiOwO" }]
+keywords = ["serpent", "monte-carlo", "neutronics", "mcp", "opencode"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = [
+    "mcp>=1.2",
+    "beautifulsoup4>=4.12",
+]
+
+[project.optional-dependencies]
+plots = ["matplotlib>=3.7"]
+test = ["pytest>=7"]
+
+[project.scripts]
+serpent2-mcp = "serpent2_mcp.server:main"
+serpent2-mcp-sync = "serpent2_mcp.knowledge.sync:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+serpent2_mcp = ["knowledge/*.md", "knowledge/*.json", "knowledge/examples/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

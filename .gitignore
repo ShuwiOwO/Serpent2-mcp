@@ -1,0 +1,64 @@
+# --- Python ---
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.tmp
+
+# --- Local configuration (may contain machine-specific absolute paths) ---
+opencode.json
+opencode.jsonc
+serpent2-mcp.toml
+.serpent2-mcp.toml
+
+# --- Local MCP runtime state (jobs, logs, caches) ---
+.serpent2-mcp/
+*.log
+
+# --- Offline installation artifacts (see tools/make_offline_bundle.sh) ---
+dist-offline/
+wheelhouse/
+*.tar.gz
+
+# --- Serpent nuclear data libraries (large; use serpent_download_data_library) ---
+*.xsdata
+*.dec
+*.nfy
+*.bra
+
+# --- Serpent calculations run locally (inputs/outputs) ---
+In_*.txt
+*.bumat*
+*.dep
+*.depmtx*
+*.wrk
+*.seed
+*_res.m
+*_det*.m
+*_dep.m
+*_bup.m
+*_his*.m
+*_mdx*.m
+*_stat*.m
+*_arr*.m
+*_fmtx*.m
+*_gsrc.m
+*_nsrc.m
+*.coe
+*.out
+*.png
+
+# --- OS / editors ---
+.DS_Store
+.idea/
+.vscode/
+
+# Runtime artifact written by the data downloader when no explicit path is set
+progress.json
