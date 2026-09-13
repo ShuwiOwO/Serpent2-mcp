@@ -26,10 +26,22 @@ Desktop, Cursor и др.) три возможности:
 
 ```sh
 cd /путь/к/Serpent2-mcp
-./setup.sh              # создаёт .venv и ставит зависимости (+ matplotlib)
-# ./setup.sh --no-plots  # без графиков (меньше зависимостей)
-# ./setup.sh --status    # проверить, что установлено
+./setup.sh                    # установка + интерактивный выбор библиотеки данных
+# ./setup.sh --data endfb71   # без вопросов: ENDF/B-VII.1 (6.6 ГБ)
+# ./setup.sh --data jeff32    # JEFF-3.2
+# ./setup.sh --data jendl40   # JENDL-4.0
+# ./setup.sh --data none      # только сервер, данные позже
+# ./setup.sh --no-plots       # без графиков (меньше зависимостей)
+# ./setup.sh --status         # проверить, что установлено
 ```
+
+Установщик сразу скачивает данные в `./xsdata`: выбранный нейтронный пакет
+(ACE + dec + nfy), термальное рассеяние (`sss_thxs`) и фотонную физику
+(`photon_data`), после чего прописывает пути в directory-файлах относительно
+корня workspace. Единственный файл, который нужно положить вручную —
+`mcplib84` для фотонного транспорта; в конце установки скрипт печатает точный
+путь и создаёт `xsdata/README_mcplib84.txt` с инструкцией. Данные можно не
+качать сейчас: `--data none`, а позже — `serpent_setup_data` из OpenCode.
 
 Альтернатива — `pipx install .`; тогда в конфиге OpenCode команда будет
 `["serpent2-mcp"]` вместо пути к python из `.venv`.
@@ -108,8 +120,8 @@ sudo apt install python3 python3-venv
 
 tar -xzf Serpent2-mcp.tar.gz        # если переносили архивом
 cd Serpent2-mcp
-./setup.sh                          # или ./setup.sh --no-plots
-./setup.sh --status                 # python, venv, версия пакета
+./setup.sh                          # или ./setup.sh --data endfb71 / --data none
+./setup.sh --status                 # python, venv, версия пакета, данные
 ```
 
 `setup.sh` использует только POSIX sh, работает на macOS и Linux, не требует
@@ -133,8 +145,9 @@ scp dist-offline.tar.gz user@target:
 ```sh
 tar -xzf dist-offline.tar.gz
 cd Serpent2-mcp
-./setup.sh --offline --wheelhouse ../wheelhouse
-# добавьте --no-plots, если бандл собран без matplotlib
+./setup.sh --offline --wheelhouse ../wheelhouse --data none
+# затем при появлении сети: ./setup.sh --data endfb71
+# или из OpenCode: serpent_setup_data(neutron="endfb71")
 ```
 
 `pydantic-core` и `matplotlib` содержат платформенные бинарники, поэтому
@@ -282,7 +295,9 @@ SSH-бэкенда недоступен — используйте его на �
 
 ### Установка данных с нуля
 
-Один вызов готовит каталог целиком (фоновая задача, 6–8 ГБ):
+Данные можно поставить сразу установщиком (`./setup.sh --data endfb71`), а
+можно позже из OpenCode — один вызов готовит каталог целиком (фоновая задача,
+6–8 ГБ):
 
 ```
 serpent_setup_data(neutron="endfb71", dest="xsdata")
@@ -428,6 +443,7 @@ SSH-бэкенд и докачку по локальному HTTP-серверу
 | Сервер не появился в OpenCode | проверьте JSON конфига, перезапустите OpenCode, `./setup.sh --status` |
 | `matplotlib is not installed` | `./setup.sh` (с графиками) — или используйте сервер без `plot_results` |
 | Поиск по докам пуст | первый синк ещё идёт: `serpent_sync_docs` или подождите минуту |
+| Загрузка данных прервалась | повторите ту же команду (`./setup.sh --data ...` или `serpent_setup_data`) — докачка с `.part` продолжит с места обрыва |
 | Level 3 не запускается | нет `sss2` (SSH-бэкенд) — используйте уровень 2 на хосте с Serpent |
 | Старый Serpent не знает флаг | сервер сам подбирает `-`/`--` по выводу `sss2`; проверьте `serpent_get_environment` |
 
