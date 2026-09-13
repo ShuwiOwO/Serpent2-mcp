@@ -27,8 +27,8 @@
 #
 # The neutron package includes ACE files, decay (dec) and fission-yield (nfy)
 # data. Paths inside the directory files are rewritten relative to this
-# directory (the workspace root, where sss2 lives). Large downloads use
-# parallel range requests (SERPENT_DOWNLOAD_THREADS, default 6).
+# directory (the workspace root, where sss2 lives). Downloads are resumable
+# and show a single-line progress bar in the terminal.
 #
 # Only mcplib84 (photon ACE cross sections, LANL/RSICC licensed) cannot be
 # downloaded automatically; the script tells you exactly where to put it.

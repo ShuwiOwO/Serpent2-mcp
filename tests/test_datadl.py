@@ -249,43 +249,6 @@ def test_download_stream_restarts_without_range_support(tmp_path: Path):
         server.shutdown()
 
 
-def test_download_threads_env(monkeypatch):
-    monkeypatch.delenv("SERPENT_DOWNLOAD_THREADS", raising=False)
-    assert datadl.download_threads() == datadl.DEFAULT_DOWNLOAD_THREADS
-    monkeypatch.setenv("SERPENT_DOWNLOAD_THREADS", "3")
-    assert datadl.download_threads() == 3
-    monkeypatch.setenv("SERPENT_DOWNLOAD_THREADS", "99")
-    assert datadl.download_threads() == 16
-    monkeypatch.setenv("SERPENT_DOWNLOAD_THREADS", "nonsense")
-    assert datadl.download_threads() == datadl.DEFAULT_DOWNLOAD_THREADS
-
-
-def test_parallel_download(tmp_path: Path, http_server: str, monkeypatch):
-    monkeypatch.setenv("SERPENT_DOWNLOAD_THREADS", "3")
-    monkeypatch.setattr(datadl, "PARALLEL_MIN_SIZE", 100_000)
-    monkeypatch.setattr(datadl, "DOWNLOAD_CHUNK_SIZE", 100_000)
-    payload = (tmp_path / "payload" / "lib.bin").read_bytes()
-    dest = tmp_path / "out"
-    path = datadl.download(f"{http_server}/lib.bin", dest, log=lambda _m: None)
-    assert path.read_bytes() == payload
-    assert not (dest / "lib.bin.chunks").exists()
-    assert not list(dest.glob("*.part"))
-
-
-def test_parallel_download_resumes_completed_chunks(tmp_path: Path, http_server: str, monkeypatch):
-    monkeypatch.setenv("SERPENT_DOWNLOAD_THREADS", "3")
-    monkeypatch.setattr(datadl, "PARALLEL_MIN_SIZE", 100_000)
-    monkeypatch.setattr(datadl, "DOWNLOAD_CHUNK_SIZE", 100_000)
-    payload = (tmp_path / "payload" / "lib.bin").read_bytes()
-    dest = tmp_path / "out"
-    chunk_dir = dest / "lib.bin.chunks"
-    chunk_dir.mkdir(parents=True)
-    (chunk_dir / f"chunk_{0:012d}").write_bytes(payload[:100_000])  # already complete
-    path = datadl.download(f"{http_server}/lib.bin", dest, log=lambda _m: None)
-    assert path.read_bytes() == payload
-    assert not chunk_dir.exists()
-
-
 def test_download_extracts_tarball_into_dest(tmp_path: Path, http_server: str):
     import io
     import tarfile

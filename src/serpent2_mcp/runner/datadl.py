@@ -16,7 +16,6 @@ import tarfile
 import threading
 import time
 import urllib.request
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -372,109 +371,8 @@ class DownloadProgress:
 
 
 # ---------------------------------------------------------------------------
-# Downloading (parallel range requests when the server supports them)
+# Downloading (single stream with resume)
 # ---------------------------------------------------------------------------
-
-DOWNLOAD_CHUNK_SIZE = 32 * 1024 * 1024
-PARALLEL_MIN_SIZE = 64 * 1024 * 1024
-DEFAULT_DOWNLOAD_THREADS = 6
-
-
-def download_threads() -> int:
-    raw = os.environ.get("SERPENT_DOWNLOAD_THREADS", "")
-    try:
-        value = int(raw) if raw else DEFAULT_DOWNLOAD_THREADS
-    except ValueError:
-        value = DEFAULT_DOWNLOAD_THREADS
-    return max(1, min(value, 16))
-
-
-def _probe_size(url: str) -> tuple[int | None, bool]:
-    """Return (content length, range support) for a URL."""
-    headers = {"User-Agent": USER_AGENT, "Accept-Encoding": "identity"}
-    try:
-        request = urllib.request.Request(url, method="HEAD", headers=headers)
-        with urllib.request.urlopen(request, timeout=30) as response:
-            length = response.headers.get("Content-Length")
-            accept = (response.headers.get("Accept-Ranges") or "").lower()
-            if length:
-                return int(length), "bytes" in accept
-    except Exception:  # noqa: BLE001
-        pass
-    try:
-        request = urllib.request.Request(url, headers={**headers, "Range": "bytes=0-0"})
-        with urllib.request.urlopen(request, timeout=30) as response:
-            content_range = response.headers.get("Content-Range") or ""
-            if "/" in content_range and content_range.rsplit("/", 1)[-1].isdigit():
-                return int(content_range.rsplit("/", 1)[-1]), True
-            length = response.headers.get("Content-Length")
-            if length and getattr(response, "status", 200) == 200:
-                return int(length), False
-    except Exception:  # noqa: BLE001
-        pass
-    return None, False
-
-
-def _fetch_range(
-    url: str,
-    start: int,
-    end: int,
-    chunk_path: Path,
-    on_bytes,
-    attempts: int = 3,
-) -> None:
-    expected = end - start + 1
-    if chunk_path.is_file() and chunk_path.stat().st_size == expected:
-        on_bytes(expected)
-        return
-    tmp = chunk_path.with_name(chunk_path.name + ".tmp")
-    last_error: Exception | None = None
-    for attempt in range(attempts):
-        if tmp.exists():
-            try:
-                tmp.unlink()
-            except OSError:
-                pass
-        written_this_attempt = 0
-
-        def account(count: int) -> None:
-            nonlocal written_this_attempt
-            written_this_attempt += count
-            on_bytes(count)
-
-        try:
-            headers = {
-                "User-Agent": USER_AGENT,
-                "Accept-Encoding": "identity",
-                "Range": f"bytes={start}-{end}",
-            }
-            request = urllib.request.Request(url, headers=headers)
-            with urllib.request.urlopen(request, timeout=120) as response:
-                status = getattr(response, "status", 200)
-                if status != 206:
-                    raise RuntimeError(f"server did not honour Range (HTTP {status})")
-                with tmp.open("wb") as handle:
-                    while True:
-                        block = response.read(1 << 22)
-                        if not block:
-                            break
-                        handle.write(block)
-                        account(len(block))
-            if tmp.stat().st_size != expected:
-                raise RuntimeError(f"short read: {tmp.stat().st_size}/{expected} bytes")
-            os.replace(tmp, chunk_path)
-            return
-        except Exception as exc:  # noqa: BLE001
-            last_error = exc
-            on_bytes(-written_this_attempt)
-            if tmp.exists():
-                try:
-                    tmp.unlink()
-                except OSError:
-                    pass
-            time.sleep(1.0 * (attempt + 1))
-    raise RuntimeError(f"range {start}-{end} failed after {attempts} attempts: {last_error}")
-
 
 def _download_stream(
     url: str,
@@ -518,93 +416,6 @@ def _download_stream(
                         log(f"{filename}: {human_size(pos)} / {human_size(total)} ({100.0 * pos / total:.1f}%)")
                     else:
                         log(f"{filename}: {human_size(pos)}")
-        bar.close()
-
-
-def _download_parallel(
-    url: str,
-    target: Path,
-    total: int,
-    threads: int,
-    resume: bool,
-    filename: str,
-    log,
-    label: str,
-    show_progress: bool | None,
-) -> None:
-    part = target.with_name(target.name + ".part")
-    chunk_dir = target.with_name(target.name + ".chunks")
-    if not resume and chunk_dir.exists():
-        shutil.rmtree(chunk_dir, ignore_errors=True)
-    chunk_dir.mkdir(parents=True, exist_ok=True)
-
-    ranges: list[tuple[int, int, Path]] = []
-    start = 0
-    while start < total:
-        end = min(start + DOWNLOAD_CHUNK_SIZE - 1, total - 1)
-        ranges.append((start, end, chunk_dir / f"chunk_{start:012d}"))
-        start = end + 1
-
-    completed = 0
-    for begin, finish, path in ranges:
-        if path.is_file() and path.stat().st_size == finish - begin + 1:
-            completed += finish - begin + 1
-
-    lock = threading.Lock()
-    bar = DownloadProgress(label, total, enabled=show_progress)
-    progress = {"done": completed, "last": 0.0, "last_line": 0.0}
-
-    def on_bytes(count: int) -> None:
-        with lock:
-            progress["done"] += count
-            done = max(0, min(progress["done"], total))
-            now = time.time()
-            report_file = now - progress["last"] > 2.0
-            if report_file:
-                progress["last"] = now
-            report_line = not bar.enabled and now - progress["last_line"] > LOG_LINE_INTERVAL
-            if report_line:
-                progress["last_line"] = now
-        bar.update(done)
-        if report_file:
-            _progress(
-                {
-                    "state": "downloading",
-                    "mode": "parallel",
-                    "threads": threads,
-                    "file": filename,
-                    "downloaded": done,
-                    "total": total,
-                }
-            )
-        if report_line:
-            log(f"{filename}: {human_size(done)} / {human_size(total)} ({100.0 * done / total:.1f}%)")
-
-    log(
-        f"parallel download: {len(ranges)} chunks x {human_size(DOWNLOAD_CHUNK_SIZE)}, "
-        f"{threads} connections, total {human_size(total)}"
-    )
-    try:
-        with ThreadPoolExecutor(max_workers=threads) as pool:
-            futures = [
-                pool.submit(_fetch_range, url, begin, finish, path, on_bytes)
-                for begin, finish, path in ranges
-            ]
-            errors: list[BaseException] = []
-            for future in as_completed(futures):
-                error = future.exception()
-                if error is not None:
-                    errors.append(error)
-            if errors:
-                raise RuntimeError(f"{len(errors)} download chunk(s) failed: {errors[0]}")
-
-        log("assembling chunks ...")
-        with part.open("wb") as output:
-            for _begin, _finish, path in ranges:
-                with path.open("rb") as source:
-                    shutil.copyfileobj(source, output, 1 << 22)
-        shutil.rmtree(chunk_dir, ignore_errors=True)
-    finally:
         bar.close()
 
 
@@ -656,12 +467,7 @@ def download(
         return target
 
     part = target.with_name(target.name + ".part")
-    threads = download_threads()
-    total, ranges_ok = _probe_size(url)
-    if total and ranges_ok and total >= PARALLEL_MIN_SIZE and threads > 1:
-        _download_parallel(url, target, total, threads, resume, filename, log, label, show_progress)
-    else:
-        _download_stream(url, part, resume, filename, log, label, show_progress)
+    _download_stream(url, part, resume, filename, log, label, show_progress)
 
     if part.exists():
         os.replace(part, target)
