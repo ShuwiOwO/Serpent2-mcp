@@ -163,3 +163,104 @@ def parse_matlab(text: str) -> dict[str, MatValue]:
 def parse_matlab_file(path: str | Path) -> dict[str, MatValue]:
     text = Path(path).read_text(encoding="utf-8", errors="replace")
     return parse_matlab(text)
+
+
+def parse_matlab_file_limited(
+    path: str | Path,
+    max_bytes: int | None = None,
+    max_rows: int = 500,
+    info: dict | None = None,
+) -> dict[str, MatValue]:
+    """Parse a Matlab file, streaming when it is larger than ``max_bytes``."""
+    path = Path(path)
+    try:
+        size = path.stat().st_size
+    except OSError:
+        size = 0
+    if max_bytes is not None and size > max_bytes:
+        if info is not None:
+            info["file_size"] = size
+            info["streamed"] = True
+        return parse_matlab_stream(path, max_rows=max_rows, info=info)
+    if info is not None:
+        info["file_size"] = size
+        info["streamed"] = False
+    return parse_matlab_file(path)
+
+
+_ASSIGN_LINE = re.compile(r"^\s*([A-Za-z_]\w*)\s*(\(\s*\d+\s*,\s*:\s*\))?\s*=\s*(.*)$")
+
+
+def parse_matlab_stream(
+    path: str | Path,
+    max_rows: int = 500,
+    info: dict | None = None,
+) -> dict[str, MatValue]:
+    """Line-oriented parser with per-variable row limits (for huge files)."""
+    result: dict[str, MatValue] = {}
+    truncated: list[str] = []
+    name: str | None = None
+    indexed = False
+    collecting = False
+    rows: list[str] = []
+
+    def finish_block() -> None:
+        nonlocal name, indexed, collecting, rows
+        assert name is not None
+        kind, value = _parse_matrix("\n".join(rows))
+        if indexed:
+            existing = result.get(name)
+            items = list(existing.value) if existing and existing.kind == "strings" else []
+            if kind == "strings":
+                items.extend(value)
+            elif kind == "string":
+                items.append(str(value).strip())
+            result[name] = MatValue("strings", items)
+        else:
+            result[name] = MatValue(kind, value)
+        name = None
+        indexed = False
+        collecting = False
+        rows = []
+
+    with Path(path).open("r", encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            if collecting:
+                if "]" in line:
+                    rows.append(line.split("]", 1)[0])
+                    finish_block()
+                    continue
+                if len(rows) < max_rows:
+                    rows.append(line)
+                elif name and name not in truncated:
+                    truncated.append(name)
+                continue
+            match = _ASSIGN_LINE.match(line)
+            if not match:
+                continue
+            name = match.group(1)
+            indexed = bool(match.group(2))
+            rhs = match.group(3).strip()
+            if rhs.startswith("["):
+                collecting = True
+                rows = []
+                body = rhs[1:]
+                if "]" in body:
+                    rows.append(body.split("]", 1)[0])
+                    finish_block()
+                elif body:
+                    rows.append(body)
+            elif "'" in rhs:
+                strings = re.findall(r"'([^']*)'", rhs)
+                if strings:
+                    result[name] = MatValue("string", strings[0])
+            else:
+                raw = rhs.split(";", 1)[0].strip()
+                try:
+                    result[name] = MatValue("scalar", _to_float(raw))
+                except ValueError:
+                    if raw:
+                        result[name] = MatValue("string", raw)
+    if info is not None:
+        info["truncated"] = truncated
+    return result

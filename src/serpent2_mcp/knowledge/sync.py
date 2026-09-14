@@ -376,6 +376,35 @@ def seed_store_cards(store: Store) -> None:
             store.set_meta({"docs_version_static": payload["docs_version"]})
 
 
+def seed_reference(store: Store) -> None:
+    """Index bundled reference facts (energy group structures, ...)."""
+    if store.get_meta("reference_seeded"):
+        return
+    from .reference import data as reference_data
+    from .reference import structures_text
+
+    source = reference_data().get("source", "")
+    text = (
+        "Pre-defined energy group structures usable with the ene input card (type 4): "
+        "'ene NAME 4 <structure>' or '<structure>_ext' for structures spanning all energies. "
+        "They cannot be used directly in detectors; redefine them with an ene card.\n\n"
+        + structures_text(limit=200)
+    )
+    store.replace_doc(
+        "reference/energy-structures",
+        source,
+        [
+            {
+                "section": "energy-structures",
+                "title": "Pre-defined energy group structures",
+                "url": source,
+                "text": text,
+            }
+        ],
+    )
+    store.set_meta({"reference_seeded": True})
+
+
 # ---------------------------------------------------------------------------
 # Synchronization
 # ---------------------------------------------------------------------------
@@ -402,6 +431,7 @@ def sync(settings: Settings, force: bool = False, log: Callable[[str], None] | N
     store = Store(db_path(settings))
     try:
         seed_store_cards(store)
+        seed_reference(store)
         if not force and is_fresh(store, settings) and store.is_ready():
             return {"status": "fresh", **store.stats()}
 
@@ -502,6 +532,7 @@ def ensure_sync_async(settings: Settings, force: bool = False) -> None:
 
     store = Store(db_path(settings))
     seed_store_cards(store)
+    seed_reference(store)
     fresh = is_fresh(store, settings) and store.is_ready()
     store.close()
     if fresh and not force:

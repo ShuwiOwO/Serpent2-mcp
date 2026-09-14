@@ -29,6 +29,7 @@ NAMED_CARDS: dict[str, str] = {
     "mflow": "material flow",
     "wwin": "weight window",
     "wwgen": "weight window mesh",
+    "fun": "user-defined function",
 }
 
 UNIVERSE_CARDS = {"lat", "nest", "pin", "pbed", "particle", "solid", "voro", "umsh"}
@@ -118,6 +119,7 @@ class Definitions:
     misc: dict[tuple[str, str], Card] = field(default_factory=dict)
     universes: set[str] = field(default_factory=set)
     burnable: set[str] = field(default_factory=set)
+    set_options: set[str] = field(default_factory=set)
 
 
 class Linter:
@@ -208,6 +210,8 @@ class Linter:
         defs = Definitions()
         for card in cards:
             args = card.args
+            if card.name == "set" and card.option:
+                defs.set_options.add(card.option)
             if card.name in NAMED_CARDS and args:
                 name = args[0].text
                 if card.name == "surf":
@@ -242,7 +246,11 @@ class Linter:
         elif name == "div":
             issues.extend(self._check_div(card, defs))
         elif name == "src":
-            issues.extend(self._check_src(card))
+            issues.extend(self._check_src(card, defs))
+        elif name == "ene":
+            issues.extend(self._check_ene(card))
+        elif name == "fun":
+            issues.extend(self._check_fun(card))
         elif name == "set":
             issues.extend(self._check_set(card, defs))
         issues.extend(self._check_unknown_params(card))
@@ -484,6 +492,69 @@ class Linter:
                         ref.line,
                     )
                 )
+            elif low == "de":
+                from ..knowledge.reference import structure_names
+
+                if ("ene", ref.text) not in defs.misc:
+                    if ref.text in structure_names():
+                        issues.append(
+                            Issue(
+                                "error",
+                                "de-ene",
+                                f"detector energy grid '{ref.text}' is a pre-defined structure; redefine it first",
+                                card.file,
+                                ref.line,
+                                hint=f"Add: ene {ref.text} 4 {ref.text}",
+                            )
+                        )
+                    else:
+                        issues.append(
+                            Issue(
+                                "warning",
+                                "undef-ene",
+                                f"detector references undefined energy grid '{ref.text}'",
+                                card.file,
+                                ref.line,
+                                hint="Define the grid with an ene card (or an include).",
+                            )
+                        )
+            elif low == "di" and ("tme", ref.text) not in defs.misc:
+                issues.append(
+                    Issue(
+                        "warning",
+                        "undef-tme",
+                        f"detector references undefined time bin structure '{ref.text}'",
+                        card.file,
+                        ref.line,
+                        hint="Define it with a tme card (or an include).",
+                    )
+                )
+            elif low == "dr" and is_numeric(ref.text):
+                mt = int(float(ref.text))
+                if mt == -100:
+                    fun_name = args[i + 2].text if i + 2 < len(args) else None
+                    if fun_name is None or ("fun", fun_name) not in defs.misc:
+                        issues.append(
+                            Issue(
+                                "error",
+                                "dr-fun",
+                                f"response -100 needs a fun card named '{fun_name or '?'}'",
+                                card.file,
+                                ref.line,
+                                hint="Declare it with: fun NAME 1 5 E1 F1 ...",
+                            )
+                        )
+                elif mt == 0 or mt < -100 or mt > 999:
+                    issues.append(
+                        Issue(
+                            "warning",
+                            "dr-mt",
+                            f"unusual detector response number {mt}",
+                            card.file,
+                            ref.line,
+                            hint="Negative values select special macroscopic responses (see the ENDF appendix).",
+                        )
+                    )
         return issues
 
     def _check_div(self, card: Card, defs: Definitions) -> list[Issue]:
@@ -512,7 +583,7 @@ class Linter:
             ]
         return []
 
-    def _check_src(self, card: Card) -> list[Issue]:
+    def _check_src(self, card: Card, defs: Definitions) -> list[Issue]:
         issues: list[Issue] = []
         args = card.args
         has_spatial = any(t.lower in {"sp", "sc", "sm", "su", "ss"} for t in args)
@@ -566,6 +637,55 @@ class Linter:
                         hint="NE counts spectrum points; verify against the version in use.",
                     )
                 )
+        for i, token in enumerate(args[:-1]):
+            if token.lower != "sg" or token.quoted:
+                continue
+            dmat = args[i + 1]
+            if dmat.text not in {"-1"} and dmat.text not in defs.materials:
+                issues.append(
+                    Issue(
+                        "error",
+                        "sg-material",
+                        f"'sg' references undefined material '{dmat.text}'",
+                        card.file,
+                        dmat.line,
+                    )
+                )
+                continue
+            if dmat.text == "-1":
+                continue
+            material = defs.materials.get(dmat.text)
+            if material is None:
+                continue
+            decay_nuclide = re.compile(r"^(\d{4,6}|[A-Z][a-z]?-\d{1,3})$")
+            has_decay = any(
+                decay_nuclide.match(tok.text) for tok in material.args[2:] if not tok.quoted
+            )
+            if not has_decay:
+                issues.append(
+                    Issue(
+                        "warning",
+                        "sg-no-decay",
+                        f"'sg' source material '{dmat.text}' has no decay-only nuclides (ZAI without library suffix)",
+                        card.file,
+                        dmat.line,
+                        hint=(
+                            "A nuclide such as 96250.03c is a transport nuclide; for a decay source add it "
+                            "as e.g. 'Cm-250' or '270600' and set declib, otherwise the emission rate is zero."
+                        ),
+                    )
+                )
+        if "sg" in {t.lower for t in args} and "declib" not in defs.set_options:
+            issues.append(
+                Issue(
+                    "warning",
+                    "sg-declib",
+                    "decay source ('sg') without 'set declib'",
+                    card.file,
+                    card.line,
+                    hint="The emission spectra are read from the decay data library.",
+                )
+            )
         return issues
 
     def _check_set(self, card: Card, defs: Definitions) -> list[Issue]:
@@ -618,6 +738,67 @@ class Linter:
                     card.file,
                     token.line,
                     hint="If this starts a new card, check its spelling; otherwise check the card syntax.",
+                )
+            )
+        return issues
+
+    def _check_ene(self, card: Card) -> list[Issue]:
+        from ..knowledge.reference import structure_names
+
+        args = card.args
+        if len(args) < 2:
+            return [Issue("error", "ene-args", "'ene' needs a name and a type", card.file, card.line)]
+        type_token = args[1]
+        if not is_numeric(type_token.text):
+            return []
+        grid_type = int(float(type_token.text))
+        if grid_type != 4:
+            return []
+        if len(args) < 3:
+            return [
+                Issue(
+                    "error",
+                    "ene-structure",
+                    "'ene ... 4' needs a pre-defined structure name (e.g. scale44)",
+                    card.file,
+                    type_token.line,
+                    hint="Try list_energy_structures to see the available names.",
+                )
+            ]
+        name = args[2].text
+        if name not in structure_names():
+            return [
+                Issue(
+                    "warning",
+                    "ene-structure",
+                    f"unknown pre-defined group structure '{name}'",
+                    card.file,
+                    args[2].line,
+                    hint="Use list_energy_structures; names may have an '_ext' variant.",
+                )
+            ]
+        return []
+
+    def _check_fun(self, card: Card) -> list[Issue]:
+        issues: list[Issue] = []
+        args = card.args
+        if len(args) < 3:
+            issues.append(
+                Issue("error", "fun-args", "'fun' needs NAME, TYPE and interpolation code", card.file, card.line)
+            )
+            return issues
+        if is_numeric(args[1].text) and int(float(args[1].text)) not in {1, 2}:
+            issues.append(
+                Issue("warning", "fun-type", f"unknown fun type '{args[1].text}' (1 or 2 expected)", card.file, args[1].line)
+            )
+        if is_numeric(args[2].text) and int(float(args[2].text)) not in {1, 2, 3, 4, 5}:
+            issues.append(
+                Issue(
+                    "warning",
+                    "fun-intt",
+                    f"unknown interpolation code '{args[2].text}' (1..5 expected)",
+                    card.file,
+                    args[2].line,
                 )
             )
         return issues

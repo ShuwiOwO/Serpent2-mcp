@@ -349,7 +349,7 @@ def test_install_photon_uses_ace_from_acedata(tmp_path: Path, http_server: str):
     assert result["ace_installed"] is True
     assert result["ace_file"].endswith("xsdata/acedata/mcplib84")
     assert not (dest / "mcplib84").exists()  # used in place, not duplicated
-    assert result["ace_path_in_directory_file"] == "xsdata/acedata/mcplib84"
+    assert result["ace_path_in_directory_file"] == str((dest / "acedata" / "mcplib84").resolve())
 
 
 def test_setup_data_with_local_server(tmp_path: Path, http_server: str):
@@ -357,6 +357,8 @@ def test_setup_data_with_local_server(tmp_path: Path, http_server: str):
     import tarfile
 
     payload = tmp_path / "payload"
+    (payload / "Serpent_2_xsdata").mkdir(parents=True, exist_ok=True)
+    (payload / "other_data").mkdir(parents=True, exist_ok=True)
 
     def make_tar(name: str, members: dict[str, bytes]) -> None:
         with tarfile.open(payload / name, "w:gz") as tar:
@@ -366,7 +368,7 @@ def test_setup_data_with_local_server(tmp_path: Path, http_server: str):
                 tar.addfile(info, io.BytesIO(data))
 
     make_tar(
-        "s2v0_endfb71.tar.gz",
+        "Serpent_2_xsdata/s2v0_endfb71.tar.gz",
         {
             "data.xsdata": (
                 b"  1001.03c 1001.03c 1 1001 0 1.0 300 0 /xs/data/acedata/1001ENDF7.ace\n"
@@ -376,7 +378,9 @@ def test_setup_data_with_local_server(tmp_path: Path, http_server: str):
             "sss_endfb7.dec": b"dec",
         },
     )
-    make_tar("sss_thxs.tar.gz", {"data/sssth1": b"thermal"})
+    make_tar("Serpent_2_xsdata/sss_thxs.tar.gz", {"data/sssth1": b"thermal"})
+    (payload / "other_data" / "sss_endfb7.dec").write_bytes(b"legacy decay")
+    (payload / "other_data" / "sss_endfb7.nfy").write_bytes(b"legacy nfy")
     _make_photon_payload(payload)
 
     dest = tmp_path / "xsdata"
@@ -384,16 +388,19 @@ def test_setup_data_with_local_server(tmp_path: Path, http_server: str):
 
     assert (dest / "data.xsdata").is_file()
     patched = (dest / "data.xsdata").read_text(encoding="utf-8")
-    assert " xsdata/acedata/1001ENDF7.ace" in patched
-    assert " xsdata/data/sssth1" in patched
+    assert f" {(dest / 'acedata' / '1001ENDF7.ace').resolve()}" in patched
+    assert f" {(dest / 'data' / 'sssth1').resolve()}" in patched
     assert "/xs/data/" not in patched
     assert (dest / "data" / "sssth1").is_file()
     assert (dest / "photon_data" / "README.txt").is_file()
     assert (dest / "mcplib.xsdata").is_file()
+    # stable aliases and natural-element aliases
+    assert (dest / "data.dec").exists()
+    assert result["stable_names"]
     assert result["thermal_scattering"] == "sss_thxs.tar.gz"
     lines = result["use_in_input"]
     assert 'set acelib "xsdata/data.xsdata" "xsdata/mcplib.xsdata"' in lines
-    assert 'set declib "xsdata/sss_endfb7.dec"' in lines
+    assert 'set declib "xsdata/data.dec"' in lines
     assert 'set pdatadir "xsdata/photon_data"' in lines
     # The fake payload has no mcplib84, so the result is partial and gives exact instructions.
     assert result["state"] == "partial"
@@ -428,12 +435,12 @@ def test_patch_xsdata_files(tmp_path: Path):
         "  9999.03c 9999.03c 1 9999 0 1.0 300 0 /xs/data/acedata/9999ENDF7.ace\n",
         encoding="utf-8",
     )
-    dry = datadl.patch_xsdata_files(dest, rel_root=tmp_path, apply=False, log=lambda _m: None)
+    dry = datadl.patch_xsdata_files(dest, apply=False, log=lambda _m: None)
     assert dry["patched"] == 1
     assert dry["missing"] == ["9999ENDF7.ace"]
     assert "/xs/data/" in xsdata.read_text(encoding="utf-8")  # dry run wrote nothing
 
-    stats = datadl.patch_xsdata_files(dest, rel_root=tmp_path, log=lambda _m: None)
+    stats = datadl.patch_xsdata_files(dest, rel_root=tmp_path, relative=True, log=lambda _m: None)
     assert stats["patched"] == 1
     text = xsdata.read_text(encoding="utf-8")
     assert " xsdata/acedata/1001ENDF7.ace" in text
@@ -474,6 +481,7 @@ def test_install_photon_relative_paths(tmp_path: Path, http_server: str):
         ace_source=ace_source,
         base_url=http_server,
         rel_root=tmp_path,
+        relative_paths=True,
         log=lambda _m: None,
     )
 
@@ -522,3 +530,75 @@ def test_install_photon_without_ace(tmp_path: Path, http_server: str):
     # Paths are written even without the ACE file, pointing at the expected location.
     assert result["ace_path_in_directory_file"] == str(dest / "mcplib84")
     assert "mcplib84" in (dest / "mcplib.xsdata").read_text(encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Absolute paths, natural aliases, selfcheck
+# ---------------------------------------------------------------------------
+
+
+def test_patch_xsdata_files_absolute_by_default(tmp_path: Path):
+    dest = tmp_path / "xsdata"
+    (dest / "acedata").mkdir(parents=True)
+    ace = dest / "acedata" / "1001ENDF7.ace"
+    ace.write_bytes(b"ace")
+    xsdata = dest / "data.xsdata"
+    xsdata.write_text("  1001.03c 1001.03c 1 1001 0 1.0 300 0 /xs/data/acedata/1001ENDF7.ace\n", encoding="utf-8")
+    stats = datadl.patch_xsdata_files(dest, log=lambda _m: None)
+    assert stats["absolute"] is True
+    text = xsdata.read_text(encoding="utf-8")
+    assert str(ace.resolve()) in text
+    assert "/xs/data/" not in text
+
+
+def test_add_natural_aliases(tmp_path: Path):
+    xsdata = tmp_path / "mcplib.xsdata"
+    xsdata.write_text(
+        "1000.84p 1000.84p 5 1000 0 1.0 0 0 /xs/data/mcplib84\n"
+        "H.84p 1000.84p 5 1000 0 1.0 0 0 /xs/data/mcplib84\n"
+        "8000.84p 8000.84p 5 8000 0 16.0 0 0 /xs/data/mcplib84\n",
+        encoding="utf-8",
+    )
+    stats = datadl.add_natural_aliases(tmp_path, log=lambda _m: None)
+    assert stats["added"] == 2
+    text = xsdata.read_text(encoding="utf-8")
+    assert "H-nat.84p 1000.84p" in text
+    assert "O-nat.84p 8000.84p" in text
+    # idempotent
+    assert datadl.add_natural_aliases(tmp_path, log=lambda _m: None)["added"] == 0
+
+
+def test_pick_main_xsdata_prefers_non_photon(tmp_path: Path):
+    (tmp_path / "mcplib.xsdata").write_text("x\n")
+    (tmp_path / "data.xsdata").write_text("x\n" * 10)
+    (tmp_path / "other.xsdata").write_text("x\n" * 50)
+    assert datadl.pick_main_xsdata(tmp_path).name == "data.xsdata"
+    (tmp_path / "data.xsdata").unlink()
+    assert datadl.pick_main_xsdata(tmp_path).name == "other.xsdata"
+
+
+def test_selfcheck_with_fake_binary(tmp_path: Path):
+    exe = tmp_path / "sss2"
+    exe.write_text(
+        "#!/bin/sh\n"
+        'if [ "$1" = "-version" ]; then echo "Serpent 2 beta"; echo " - Version 9.9.9"; exit 0; fi\n'
+        "exit 0\n",
+        encoding="utf-8",
+    )
+    exe.chmod(0o755)
+    data = tmp_path / "xsdata"
+    (data / "acedata").mkdir(parents=True)
+    (data / "acedata" / "1001ENDF7.ace").write_bytes(b"ace")
+    (data / "data.xsdata").write_text("  1001.03c 1001.03c 1 1001 0 1.0 300 0 /xs/data/acedata/1001ENDF7.ace\n", encoding="utf-8")
+    report = datadl.selfcheck(exe, data, log=lambda _m: None)
+    assert report["ok"] is True
+    assert report["acelib"].endswith("data.xsdata")
+    assert report["missing_referenced"] == []
+    assert "-norun" in report["flags"]
+
+
+def test_missing_referenced_reports_absent_files(tmp_path: Path):
+    data = tmp_path / "xsdata"
+    data.mkdir()
+    (data / "data.xsdata").write_text("  1001.03c 1001.03c 1 1001 0 1.0 300 0 /xs/data/acedata/nope.ace\n", encoding="utf-8")
+    assert datadl._missing_referenced(data, [data / "data.xsdata"]) == ["nope.ace"]

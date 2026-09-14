@@ -6,11 +6,14 @@ from pathlib import Path
 
 from serpent2_mcp.results import (
     detector_series,
+    find_outputs,
     parse_matlab,
     parse_matlab_file,
+    parse_matlab_file_limited,
     summarize_dep,
     summarize_det,
     summarize_res,
+    summarize_source_files,
 )
 
 
@@ -83,3 +86,29 @@ def test_summarize_dep(fixtures_dir: Path):
     assert summary["nuclides"] == ["U-235", "U-238", "O-16"]
     assert summary["bu"] == [0.0, 1.0, 5.0]
     assert summary["days"] == [0.0, 30.0, 150.0]
+
+
+def test_find_outputs_full_input_name(tmp_path: Path):
+    (tmp_path / "HW3_N.sh_res.m").write_text("X = 1;\n", encoding="utf-8")
+    (tmp_path / "HW3_N.sh_gsrc.m").write_text("mat_a_tot = 1.0E+11;\ntot = 1.0E+11;\n", encoding="utf-8")
+    found = find_outputs(tmp_path, "HW3_N.sh")
+    assert [p.name for p in found["source"]] == ["HW3_N.sh_gsrc.m"]
+    summary = summarize_source_files(found["source"])
+    assert summary["total_per_s"] == 1.0e11
+    assert summary["materials"]["a"]["total_per_s"] == 1.0e11
+
+
+def test_parse_matlab_file_limited_streams_large_files(tmp_path: Path):
+    path = tmp_path / "big_det.m"
+    with path.open("w", encoding="utf-8") as handle:
+        handle.write("DETx = [\n")
+        for i in range(5000):
+            handle.write(f"1 1 1 1 1 1 1 1 1 1 {i}.0 0.01\n")
+        handle.write("];\n")
+        handle.write("DETxE = [\n 1 2 3\n 4 5 6\n];\n")
+    info: dict = {}
+    data = parse_matlab_file_limited(path, max_bytes=1024, max_rows=100, info=info)
+    assert info["streamed"] is True
+    assert "DETx" in info["truncated"]
+    assert len(data["DETx"].rows()) == 100
+    assert data["DETxE"].rows()[0] == [1.0, 2.0, 3.0]

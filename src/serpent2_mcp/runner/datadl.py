@@ -10,16 +10,18 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import sys
 import tarfile
+import tempfile
 import threading
 import time
 import urllib.request
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from ..util import USER_AGENT, human_size
+from ..util import USER_AGENT, human_size, run_capture
 
 REPO = "https://serpent.vtt.fi/repository"
 
@@ -110,6 +112,22 @@ CATALOG: list[DataLibrary] = [
         "Neutron-induced fission yields — ENDF/B-VII",
         f"{REPO}/other_data/sss_endfb7.nfy",
         6_921_538,
+        "decay",
+        False,
+    ),
+    DataLibrary(
+        "s2v0_jeff311.dec",
+        "Radioactive decay data — JEFF-3.1.1 (closest VTT-hosted match to the JEFF-3.x decay files used by older decks)",
+        f"{REPO}/other_data/s2v0_jeff311.dec",
+        41_898_222,
+        "decay",
+        False,
+    ),
+    DataLibrary(
+        "s2v0_jeff311.nfy",
+        "Neutron-induced fission yields — JEFF-3.1.1",
+        f"{REPO}/other_data/s2v0_jeff311.nfy",
+        4_292_514,
         "decay",
         False,
     ),
@@ -207,6 +225,10 @@ ALIASES = {
     "endf-b-vii.1": "endfb71",
     "endf71": "endfb71",
     "sss_endfb7": "sss_endfb7.dec",
+    "jef3": "s2v0_jeff311.dec",
+    "jef-3": "s2v0_jeff311.dec",
+    "jeff-3.1.1 decay": "s2v0_jeff311.dec",
+    "jeff311": "s2v0_jeff311.dec",
     "jeff": "jeff32",
     "jeff-3.2": "jeff32",
     "jeff32": "jeff32",
@@ -436,6 +458,7 @@ def download(
     force: bool = False,
     patch: bool = False,
     rel_root: str | Path | None = None,
+    relative_paths: bool = False,
     label: str | None = None,
     show_progress: bool | None = None,
     log=print,
@@ -462,7 +485,7 @@ def download(
             payload["dest"] = str(dest)
             _progress(payload)
         if extract and patch:
-            payload["patch"] = patch_xsdata_files(dest, rel_root=rel_root, log=log)
+            payload["patch"] = patch_xsdata_files(dest, rel_root=rel_root, relative=relative_paths, log=log)
             _progress(payload)
         return target
 
@@ -485,7 +508,7 @@ def download(
         final["state"] = "extracted"
         final["dest"] = str(dest)
         if patch:
-            final["patch"] = patch_xsdata_files(dest, rel_root=rel_root, log=log)
+            final["patch"] = patch_xsdata_files(dest, rel_root=rel_root, relative=relative_paths, log=log)
         _progress(final)
     return target
 
@@ -567,14 +590,16 @@ def _rel_path(target: Path, rel_root: str | Path | None) -> str:
     Paths that would have to escape the root (``..``) are returned as absolute
     paths instead of awkward relative ones.
     """
+    target_abs = Path(os.path.abspath(str(target)))
     if rel_root:
         try:
-            relative = os.path.relpath(target.resolve(), Path(rel_root).expanduser().resolve())
+            root_abs = Path(os.path.abspath(str(Path(rel_root).expanduser())))
+            relative = os.path.relpath(target_abs, root_abs)
             if not relative.startswith(".."):
                 return relative
         except (OSError, ValueError):
             pass
-    return str(target)
+    return str(target_abs)
 
 
 def _build_file_index(directory: Path, skip_suffixes: tuple[str, ...] = (".xsdata",)) -> dict[str, Path]:
@@ -592,21 +617,24 @@ def patch_xsdata_files(
     directory: str | Path,
     rel_root: str | Path | None = None,
     apply: bool = True,
+    relative: bool = False,
     log=print,
 ) -> dict:
     """Rewrite data file paths inside every *.xsdata directory file.
 
     VTT directory files reference the data files under '/xs/data/'. This
     function finds each referenced file by its base name inside ``directory``
-    and rewrites the entry to point at the local copy (relative to
-    ``rel_root`` when given). Entries whose data files are missing are left
-    untouched and reported. With ``apply=False`` nothing is written (dry run).
+    and rewrites the entry to the local absolute path (or relative to
+    ``rel_root`` when ``relative=True``). Entries whose data files are missing
+    are left untouched and reported. With ``apply=False`` nothing is written
+    (dry run).
     """
     directory = Path(directory).expanduser()
     index = _build_file_index(directory)
     stats: dict = {
         "directory": str(directory),
         "applied": apply,
+        "absolute": not relative,
         "files": 0,
         "entries": 0,
         "patched": 0,
@@ -633,7 +661,7 @@ def patch_xsdata_files(
                     stats["missing"].append(base)
                 output.append(line)
                 continue
-            new_path = _rel_path(target, rel_root)
+            new_path = _rel_path(target, rel_root) if relative else str(target.resolve())
             if new_path != old_path:
                 changed += 1
             output.append(f"{head} {new_path}")
@@ -651,6 +679,116 @@ def patch_xsdata_files(
 PHOTON_DATA_EXPECTED = ("ComptonProfiles.dat", "cohff.dat", "deffcor.dat")
 
 
+# ---------------------------------------------------------------------------
+# Directory-file compatibility helpers
+# ---------------------------------------------------------------------------
+
+ELEMENT_SYMBOLS: dict[int, str] = {
+    1: "H", 2: "He", 3: "Li", 4: "Be", 5: "B", 6: "C", 7: "N", 8: "O", 9: "F", 10: "Ne",
+    11: "Na", 12: "Mg", 13: "Al", 14: "Si", 15: "P", 16: "S", 17: "Cl", 18: "Ar", 19: "K", 20: "Ca",
+    21: "Sc", 22: "Ti", 23: "V", 24: "Cr", 25: "Mn", 26: "Fe", 27: "Co", 28: "Ni", 29: "Cu", 30: "Zn",
+    31: "Ga", 32: "Ge", 33: "As", 34: "Se", 35: "Br", 36: "Kr", 37: "Rb", 38: "Sr", 39: "Y", 40: "Zr",
+    41: "Nb", 42: "Mo", 43: "Tc", 44: "Ru", 45: "Rh", 46: "Pd", 47: "Ag", 48: "Cd", 49: "In", 50: "Sn",
+    51: "Sb", 52: "Te", 53: "I", 54: "Xe", 55: "Cs", 56: "Ba", 57: "La", 58: "Ce", 59: "Pr", 60: "Nd",
+    61: "Pm", 62: "Sm", 63: "Eu", 64: "Gd", 65: "Tb", 66: "Dy", 67: "Ho", 68: "Er", 69: "Tm", 70: "Yb",
+    71: "Lu", 72: "Hf", 73: "Ta", 74: "W", 75: "Re", 76: "Os", 77: "Ir", 78: "Pt", 79: "Au", 80: "Hg",
+    81: "Tl", 82: "Pb", 83: "Bi", 84: "Po", 85: "At", 86: "Rn", 87: "Fr", 88: "Ra", 89: "Ac", 90: "Th",
+    91: "Pa", 92: "U", 93: "Np", 94: "Pu", 95: "Am", 96: "Cm", 97: "Bk", 98: "Cf", 99: "Es", 100: "Fm",
+}
+
+
+def add_natural_aliases(directory: str | Path, log=print) -> dict:
+    """Add 'Element-nat.<lib>' aliases for natural (ZA = Z000) entries.
+
+    Older user decks (and older Serpent distributions) refer to natural
+    compositions as ``H-nat.84p`` or ``C-nat.03c``; some VTT directory files
+    only contain the short alias ``H.84p``. The data itself is present either
+    way -- this only adds the alternative spelling.
+    """
+    directory = Path(directory).expanduser()
+    stats: dict = {"files": 0, "added": 0, "aliases": []}
+    for xsdata in sorted(directory.rglob("*.xsdata")):
+        lines = xsdata.read_text(encoding="utf-8", errors="replace").splitlines()
+        names = {
+            line.split()[0]
+            for line in lines
+            if line.strip() and not line.strip().startswith(("#", "%")) and len(line.split()) > 1
+        }
+        additions: list[str] = []
+        for line in lines:
+            stripped = line.strip()
+            if not stripped or stripped.startswith(("#", "%")):
+                continue
+            fields = stripped.split()
+            if len(fields) < 3 or "." not in fields[1]:
+                continue
+            name = fields[0]
+            base_za, _, lib = fields[1].partition(".")
+            if not base_za.isdigit() or len(base_za) < 4:
+                continue
+            z, a = int(base_za[:-3]), int(base_za[-3:])
+            if a != 0 or z not in ELEMENT_SYMBOLS:
+                continue
+            alias = f"{ELEMENT_SYMBOLS[z]}-nat.{lib}"
+            if alias in names:
+                continue
+            additions.append(f"{alias}{stripped[len(name):]}")
+            names.add(alias)
+            stats["aliases"].append(alias)
+        if additions:
+            with xsdata.open("a", encoding="utf-8") as handle:
+                if lines and lines[-1].strip():
+                    handle.write("\n")
+                handle.write("\n".join(additions) + "\n")
+            stats["files"] += 1
+            stats["added"] += len(additions)
+            log(f"added {len(additions)} natural aliases to {xsdata.name}")
+    return stats
+
+
+def pick_main_xsdata(directory: str | Path) -> Path | None:
+    """Best neutron/mixed directory file (never the photon-only mcplib)."""
+    directory = Path(directory).expanduser()
+    candidates = [
+        path
+        for path in directory.glob("*.xsdata")
+        if "mcplib" not in path.name.lower() and "+" not in path.name
+    ]
+    if not candidates:
+        candidates = [path for path in directory.glob("*.xsdata") if path.name.lower() != "mcplib.xsdata"]
+    if not candidates:
+        return None
+    for path in candidates:
+        if path.name == "data.xsdata":
+            return path
+    return max(candidates, key=lambda path: path.stat().st_size)
+
+
+def _ensure_stable_names(directory: Path, log=print) -> dict:
+    """Create stable aliases (data.xsdata / data.dec / data.nfy) if possible."""
+    created: list[str] = []
+    main = pick_main_xsdata(directory)
+    for target, alias_name in (
+        (main, "data.xsdata"),
+        (_find_shallowest(directory, "sss_endfb7.dec") or _find_shallowest(directory, "*.dec"), "data.dec"),
+        (_find_shallowest(directory, "sss_endfb7.nfy") or _find_shallowest(directory, "*.nfy"), "data.nfy"),
+    ):
+        if target is None:
+            continue
+        alias = directory / alias_name
+        if alias.exists():
+            continue
+        try:
+            os.symlink(target.name, alias)
+            created.append(f"{alias_name} -> {target.name}")
+        except OSError:
+            shutil.copy2(target, alias)
+            created.append(f"{alias_name} (copy of {target.name})")
+    if created:
+        log("stable names: " + ", ".join(created))
+    return {"created": created}
+
+
 def install_photon(
     dest: str | Path,
     ace_source: str | Path | None = None,
@@ -659,6 +797,7 @@ def install_photon(
     patch: bool = True,
     base_url: str = REPO,
     rel_root: str | Path | None = None,
+    relative_paths: bool = False,
     log=print,
 ) -> dict:
     """Download VTT photon data and wire up a mcplib84 ACE file.
@@ -727,11 +866,13 @@ def install_photon(
     ace_installed = ace_path is not None
     # Write the path even if the ACE file is missing, so that placing the file
     # there later is enough (no re-run needed).
-    ace_in_file = _rel_path(ace_path or default_target, rel_root)
+    ace_target = ace_path or default_target
+    ace_in_file = _rel_path(ace_target, rel_root) if relative_paths else str(ace_target.resolve())
     patched = 0
     if patch:
         patched = patch_directory_file(xsdata, ace_in_file)
         log(f"patched {patched} path entries in {xsdata.name} -> {ace_in_file}")
+    aliases = add_natural_aliases(dest, log=log)
 
     photon_dir = dest / "photon_data"
     extracted = sorted(p.name for p in photon_dir.iterdir()) if photon_dir.is_dir() else []
@@ -760,6 +901,7 @@ def install_photon(
         "photon_data_dir": str(photon_dir),
         "photon_data_files": extracted[:30],
         "photon_data_missing": missing,
+        "natural_aliases_added": aliases.get("added", 0),
         "use_in_input": use_in_input,
     }
     if ace_installed:
@@ -801,28 +943,44 @@ def _find_shallowest(directory: Path, pattern: str) -> Path | None:
 
 
 def input_lines(dest: str | Path, rel_root: str | Path | None = None) -> list[str]:
-    """Ready-to-paste set lines for the data installed in ``dest``."""
+    """Ready-to-paste set lines for the data installed in ``dest``.
+
+    Prefers the stable aliases (data.xsdata / data.dec / data.nfy) so that the
+    same lines work no matter which evaluation was downloaded.
+    """
     dest = Path(dest).expanduser()
 
     def rel(path: Path) -> str:
         return _rel_path(path, rel_root)
 
     acelib: list[Path] = []
-    for name in ("data.xsdata", "data_u.xsdata", "mcplib.xsdata"):
+    for name in ("data.xsdata", "mcplib.xsdata"):
         candidate = dest / name
         if candidate.is_file():
             acelib.append(candidate)
-    for candidate in sorted(dest.rglob("*.xsdata")):
-        if candidate not in acelib:
-            acelib.append(candidate)
+    if not acelib:
+        main = pick_main_xsdata(dest)
+        if main is not None:
+            acelib.append(main)
+        photon = dest / "mcplib.xsdata"
+        if photon.is_file():
+            acelib.append(photon)
 
     lines: list[str] = []
     if acelib:
         lines.append("set acelib " + " ".join(f'"{rel(path)}"' for path in acelib))
-    for pattern, option in (("*.dec", "set declib"), ("*.nfy", "set nfylib"), ("*.bra", "set bralib")):
-        candidate = _find_shallowest(dest, pattern)
+    for name, pattern, option in (
+        ("data.dec", "sss_endfb7.dec", "set declib"),
+        ("data.nfy", "sss_endfb7.nfy", "set nfylib"),
+    ):
+        candidate = dest / name
+        if not candidate.is_file():
+            candidate = _find_shallowest(dest, pattern) or _find_shallowest(dest, f"*{pattern[3:]}")
         if candidate is not None:
             lines.append(f'{option} "{rel(candidate)}"')
+    bra = _find_shallowest(dest, "*.bra")
+    if bra is not None:
+        lines.append(f'set bralib "{rel(bra)}"')
     photon_dir = dest / "photon_data"
     if photon_dir.is_dir():
         lines.append(f'set pdatadir "{rel(photon_dir)}"')
@@ -834,19 +992,23 @@ def setup_data(
     neutron: str = "endfb71",
     with_photon: bool = True,
     with_thxs: bool = True,
+    with_other_data: bool = True,
     base_url: str = REPO,
     rel_root: str | Path | None = None,
     ace_file: str | Path | None = None,
     ace_url: str | None = None,
+    relative_paths: bool = False,
     log=print,
 ) -> dict:
     """Prepare a fresh data directory in one call.
 
-    Downloads and extracts one neutron data package (which also contains the
-    decay and fission-yield data), the thermal scattering library, patches all
-    ``/xs/data/`` paths inside the extracted ``*.xsdata`` files to the local
-    files, optionally installs the photon physics data, and returns
-    ready-to-paste input lines.
+    Downloads and extracts one neutron data package (ACE + decay + fission
+    yields), the thermal scattering library, the ENDF/B-VII decay/yield files
+    (the names used by older decks), patches all ``/xs/data/`` paths inside the
+    extracted ``*.xsdata`` files to absolute local paths, adds stable aliases
+    (``data.xsdata``/``data.dec``/``data.nfy``) and natural-element aliases,
+    and optionally installs the photon data. Returns ready-to-paste input
+    lines.
     """
     entry = find_entry(neutron)
     if entry is None or entry.manual:
@@ -856,9 +1018,10 @@ def setup_data(
     base_url = base_url.rstrip("/")
 
     def _package_url(item: DataLibrary) -> str:
-        return item.url if base_url == REPO.rstrip("/") else f"{base_url}/{item.filename}"
+        # A mirror keeps the repository layout below the base URL.
+        return item.url if base_url == REPO.rstrip("/") else base_url + item.url[len(REPO):]
 
-    log(f"[1/4] downloading neutron library '{entry.key}' ...")
+    log(f"[1/5] downloading neutron library '{entry.key}' ...")
     _progress({"state": "setup", "step": "neutron", "library": entry.key})
     download(
         _package_url(entry),
@@ -867,13 +1030,14 @@ def setup_data(
         extract=True,
         patch=True,
         rel_root=rel_root,
+        relative_paths=relative_paths,
         label=f"{entry.key} neutron library",
         log=log,
     )
 
     thxs_entry = CATALOG_BY_KEY.get("thxs")
     if with_thxs and thxs_entry is not None:
-        log("[2/4] downloading thermal scattering libraries ...")
+        log("[2/5] downloading thermal scattering libraries ...")
         _progress({"state": "setup", "step": "thermal-scattering"})
         download(
             _package_url(thxs_entry),
@@ -886,11 +1050,29 @@ def setup_data(
             log=log,
         )
     else:
-        log("[2/4] thermal scattering libraries skipped")
+        log("[2/5] thermal scattering libraries skipped")
+
+    if with_other_data:
+        log("[3/5] downloading ENDF/B-VII decay and fission-yield data ...")
+        _progress({"state": "setup", "step": "other-data"})
+        for key in ("sss_endfb7.dec", "sss_endfb7.nfy"):
+            data_entry = CATALOG_BY_KEY.get(key)
+            if data_entry is None:
+                continue
+            download(
+                _package_url(data_entry),
+                dest,
+                filename=data_entry.filename,
+                extract=False,
+                label=f"{key} (legacy name)",
+                log=log,
+            )
+    else:
+        log("[3/5] decay/fission-yield files skipped")
 
     photon: dict | None = None
     if with_photon:
-        log("[3/4] installing photon data ...")
+        log("[4/5] installing photon data ...")
         _progress({"state": "setup", "step": "photon"})
         photon = install_photon(
             dest,
@@ -898,14 +1080,17 @@ def setup_data(
             ace_url=ace_url,
             base_url=base_url,
             rel_root=rel_root,
+            relative_paths=relative_paths,
             log=log,
         )
     else:
-        log("[3/4] photon data skipped")
+        log("[4/5] photon data skipped")
 
-    log("[4/4] patching data paths ...")
+    log("[5/5] patching data paths and adding aliases ...")
     _progress({"state": "setup", "step": "patch"})
-    patch_stats = patch_xsdata_files(dest, rel_root=rel_root, apply=True, log=log)
+    patch_stats = patch_xsdata_files(dest, rel_root=rel_root, apply=True, relative=relative_paths, log=log)
+    aliases = add_natural_aliases(dest, log=log)
+    stable = _ensure_stable_names(dest, log=log)
 
     lines = input_lines(dest, rel_root=rel_root)
     installed = sorted(p.name for p in dest.iterdir())
@@ -916,6 +1101,8 @@ def setup_data(
         "relative_to": str(rel_root) if rel_root else None,
         "use_in_input": lines,
         "patch": patch_stats,
+        "natural_aliases_added": aliases.get("added", 0),
+        "stable_names": stable.get("created", []),
         "installed_top_level": installed[:50],
     }
     if with_thxs and thxs_entry is not None:
@@ -954,7 +1141,6 @@ def setup_data(
                 f"       {CATALOG_BY_KEY['mcplib84'].homepage}",
                 "  2. Save the file exactly as:",
                 f"       {manual_target}",
-                f"       (or '{_rel_path(manual_target, rel_root)}' relative to the workspace root)",
                 "  3. Verify: ~15 MB, first line starts with '  1000.84p'.",
                 "  4. Re-run install_photon_data / setup_data (or check_data_paths).",
                 "  Do not publish mcplib84: LANL/RSICC licensed data.",
@@ -966,6 +1152,107 @@ def setup_data(
     _progress(result)
     log(f"setup complete: {result['state']}")
     return result
+
+
+def _run_norun(exe: str, input_path: Path, workdir: Path) -> tuple[int, str, list[str]]:
+    """Run `sss2 INPUT -noplot -norun`, trying single- and double-dash flags."""
+    last: tuple[int, str, list[str]] = (127, "", [])
+    for flags in (["-noplot", "-norun"], ["--noplot", "--norun"]):
+        rc, out, err = run_capture([exe, input_path.name, *flags], timeout=180, cwd=workdir)
+        text = f"{out}\n{err}"
+        if "unknown command line option" in text.lower():
+            last = (rc, text, flags)
+            continue
+        return rc, text, flags
+    return last
+
+
+def _missing_referenced(directory: Path, files: list[Path]) -> list[str]:
+    """Data files referenced by the given directory files but not present."""
+    index = _build_file_index(directory)
+    missing: list[str] = []
+    for xsdata in files:
+        if not xsdata.is_file():
+            continue
+        for line in xsdata.read_text(encoding="utf-8", errors="replace").splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith(("#", "%")):
+                continue
+            _head, _sep, path = stripped.rpartition(" ")
+            base = Path(path).name
+            if base and base not in index and base not in missing:
+                missing.append(base)
+    return missing
+
+def selfcheck(exe: str | Path | None, data_dir: str | Path, workdir: str | Path | None = None, log=print) -> dict:
+    """Validate that the executable and the installed data actually work.
+
+    Builds a minimal external-source input referencing the installed directory
+    files and runs ``sss2 -noplot -norun`` (input processing only, no
+    transport). Returns a machine-readable report.
+    """
+    from .probe import resolve_executable  # local import to avoid cycles
+
+    exe_path = resolve_executable(str(exe) if exe else None)
+    data_dir = Path(data_dir).expanduser()
+    if exe_path is None:
+        return {"ok": False, "error": "sss2 executable not found"}
+    # Repair stale relative paths before validating.
+    repair = patch_xsdata_files(data_dir, apply=True)
+    main = pick_main_xsdata(data_dir)
+    if main is None:
+        return {"ok": False, "error": f"no neutron directory file (*.xsdata) in {data_dir}"}
+    dec = data_dir / "data.dec"
+    if not dec.is_file():
+        dec = _find_shallowest(data_dir, "sss_endfb7.dec") or _find_shallowest(data_dir, "*.dec")
+    nfy = data_dir / "data.nfy"
+    if not nfy.is_file():
+        nfy = _find_shallowest(data_dir, "sss_endfb7.nfy") or _find_shallowest(data_dir, "*.nfy")
+    photon_dir = data_dir / "photon_data"
+
+    lines = [
+        'set title "serpent2-mcp selfcheck"',
+        "mat selfcheck_mat -1.0",
+        "1001.03c 1.0",
+        "surf 1 sph 0.0 0.0 0.0 1.0",
+        "cell 1 0 selfcheck_mat -1",
+        "cell 2 0 outside 1",
+        "src 1 sp 0 0 0 se 1.0",
+        "set nps 1000",
+        f'set acelib "{main.resolve()}"',
+    ]
+    if dec is not None and dec.is_file():
+        lines.append(f'set declib "{dec.resolve()}"')
+    if nfy is not None and nfy.is_file():
+        lines.append(f'set nfylib "{nfy.resolve()}"')
+    if photon_dir.is_dir():
+        lines.append(f'set pdatadir "{photon_dir.resolve()}"')
+
+    tmpdir = Path(tempfile.mkdtemp(prefix="serpent-selfcheck-"))
+    try:
+        input_path = tmpdir / "selfcheck.inp"
+        input_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        rc, text, flags = _run_norun(str(exe_path), input_path, tmpdir)
+        errors = []
+        for match in re.finditer(r'Input error in parameter "([^"]*)" on line (\d+) in file "([^"]*)":\s*\n?\s*([^\n]*)', text):
+            errors.append({"parameter": match.group(1), "line": int(match.group(2)), "file": match.group(3), "message": match.group(4).strip()})
+        report = {
+            "ok": rc == 0 and not errors,
+            "exe": str(exe_path),
+            "acelib": str(main),
+            "declib": str(dec) if dec else None,
+            "nfylib": str(nfy) if nfy else None,
+            "flags": flags,
+            "exit_code": rc,
+            "errors": errors,
+            "paths_repaired": repair.get("patched", 0),
+            "missing_referenced": _missing_referenced(data_dir, [main] + ([data_dir / "mcplib.xsdata"] if (data_dir / "mcplib.xsdata").is_file() else [])),
+            "log_tail": text[-2500:],
+        }
+        log(f"selfcheck: {'OK' if report['ok'] else 'FAILED'} (acelib={main.name})")
+        return report
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 def _print_result(result: dict, stream=None) -> None:
@@ -1011,7 +1298,8 @@ def main(argv: list[str] | None = None) -> None:
         help="if the file already exists, re-extract it (does not re-download)",
     )
     dl.add_argument("--patch", action="store_true", help="rewrite data paths inside extracted *.xsdata files")
-    dl.add_argument("--rel-root", default=None, help="write patched paths relative to this directory (workspace root)")
+    dl.add_argument("--rel-root", default=None, help="workspace root for relative input hints")
+    dl.add_argument("--rel-paths", action="store_true", help="write relative instead of absolute paths into *.xsdata")
 
     px = sub.add_parser("patch-xsdata", help="rewrite data file paths inside *.xsdata directory files")
     px.add_argument("--dir", required=True, help="directory containing the extracted data and *.xsdata files")
@@ -1038,11 +1326,17 @@ def main(argv: list[str] | None = None) -> None:
     st.add_argument("--dest", required=True, help="destination directory")
     st.add_argument("--no-photon", action="store_true", help="skip photon physics data")
     st.add_argument("--no-thxs", action="store_true", help="skip thermal scattering libraries")
+    st.add_argument("--no-other-data", action="store_true", help="skip the ENDF/B-VII decay/yield files")
     st.add_argument("--ace-source", default=None, help="directory to search for mcplib84")
     st.add_argument("--ace-file", default=None, help="explicit path to the mcplib84 ACE file")
     st.add_argument("--ace-url", default=None, help="direct URL of the mcplib84 ACE file")
     st.add_argument("--rel-root", default=None, help="write paths relative to this directory (workspace root)")
     st.add_argument("--base-url", default=REPO, help=argparse.SUPPRESS)
+
+    sc = sub.add_parser("selfcheck", help="validate the executable and installed data with a minimal -norun run")
+    sc.add_argument("--exe", required=True, help="path to sss2")
+    sc.add_argument("--data-dir", required=True, help="directory with the installed data")
+    sc.add_argument("--workdir", default=None, help=argparse.SUPPRESS)
 
     args = parser.parse_args(argv)
     if args.command == "list":
@@ -1054,11 +1348,16 @@ def main(argv: list[str] | None = None) -> None:
             neutron=args.neutron,
             with_photon=not args.no_photon,
             with_thxs=not args.no_thxs,
+            with_other_data=not args.no_other_data,
             base_url=args.base_url,
             rel_root=args.rel_root,
             ace_file=args.ace_file,
             ace_url=args.ace_url,
         )
+        _print_result(result)
+        return
+    if args.command == "selfcheck":
+        result = selfcheck(args.exe, args.data_dir, workdir=args.workdir)
         _print_result(result)
         return
     if args.command == "patch-xsdata":
@@ -1091,6 +1390,7 @@ def main(argv: list[str] | None = None) -> None:
             force=args.force,
             patch=args.patch and entry.extract and not args.no_extract,
             rel_root=args.rel_root,
+            relative_paths=args.rel_paths,
         )
         return
     if args.url:
@@ -1103,6 +1403,7 @@ def main(argv: list[str] | None = None) -> None:
             force=args.force,
             patch=args.patch and not args.no_extract,
             rel_root=args.rel_root,
+            relative_paths=args.rel_paths,
         )
         return
     print("either --name or --url is required", file=sys.stderr)

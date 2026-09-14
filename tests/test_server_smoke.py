@@ -71,6 +71,8 @@ def test_server_lists_tools_and_calls_tools(tmp_path):
                     "check_data_paths",
                     "setup_data",
                     "mcplib84_instructions",
+                    "list_energy_structures",
+                    "selfcheck",
                 } <= names
 
                 response = await session.call_tool("get_card", {"name": "surf"})
@@ -123,5 +125,18 @@ def test_server_lists_tools_and_calls_tools(tmp_path):
                 instructions = json.loads(response.content[0].text)
                 assert instructions["status"] == "missing"
                 assert instructions["place_file_at"].endswith("xsdata/mcplib84")
+
+                response = await session.call_tool("list_energy_structures", {})
+                structures = json.loads(response.content[0].text)["structures"]
+                assert any(item["name"] == "scale44" for item in structures)
+
+                response = await session.call_tool("get_card", {"name": "sg"})
+                resolved = json.loads(response.content[0].text)
+                assert resolved["resolved_as"] == "parameter"
+                assert resolved["card"] == "src"
+
+                response = await session.call_tool("get_card", {"name": "ene"})
+                ene = json.loads(response.content[0].text)
+                assert "scale44" in ene["predefined_structures"]
 
     _run(scenario())

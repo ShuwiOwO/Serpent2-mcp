@@ -316,7 +316,32 @@ def load_settings(workspace: str | Path | None = None) -> Settings:
                     return candidate
         return files[0] if files else None
 
-    acelib = _pick("SERPENT_ACELIB", sec.get("acelib"), xsdata_files, "data.xsdata")
+    def _pick_acelib(files: list[Path]) -> Path | None:
+        """Prefer the main neutron/mixed directory file.
+
+        Never guess the photon-only ``mcplib.xsdata`` or a variant such as
+        ``...+Xe135m.xsdata`` when a normal directory file is present.
+        """
+        if not files:
+            return None
+        for candidate in files:
+            if candidate.name == "data.xsdata":
+                return candidate
+        ranked = sorted(
+            files,
+            key=lambda path: (
+                "mcplib" in path.name.lower(),
+                "+" in path.name,
+                -path.stat().st_size,
+            ),
+        )
+        return ranked[0]
+
+    raw_acelib = os.environ.get("SERPENT_ACELIB") or sec.get("acelib")
+    if raw_acelib:
+        acelib = _resolve_explicit_path(str(raw_acelib), ws)
+    else:
+        acelib = _pick_acelib(xsdata_files)
     declib = _pick("SERPENT_DECLIB", sec.get("declib"), dec_files, "sss_endfb7.dec")
     nfylib = _pick("SERPENT_NFYLIB", sec.get("nfylib"), nfy_files, "sss_endfb7.nfy")
 

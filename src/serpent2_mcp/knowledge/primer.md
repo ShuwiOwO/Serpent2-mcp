@@ -176,6 +176,34 @@ The `sb` data lines belong to the `src` card and continue until the next
 reserved card name or EOF. Data lines must not *start* with a reserved card
 name (e.g. `mat`, `set`, `cell`, `det`), or the parser will split the card.
 
+### 5.1 Radioactive decay source (`sg`)
+
+```
+src NAME p|n sg DMAT MODE
+```
+
+- `DMAT`: material name or `-1` for all radioactive materials.
+- `MODE`: 1 = analog (intensities), 2 = implicit (weights).
+- The emitting nuclides must carry decay data. In photon decks the emitter is
+  usually added as a **decay nuclide** (ZAI or element form without a library
+  suffix), e.g. `Cm-250 1` or `270600 -4.776E-13`; a transport nuclide such as
+  `96250.03c` has decay data but decays via the transport library and may show
+  `Photon emission rate 0.00000E+00` in the output.
+- Requires `set declib`; spontaneous-fission neutrons additionally require
+  `set nfylib`.
+- Serpent writes the emitted spectra to `INPUT_gsrc.m` / `INPUT_nsrc.m`. Their
+  `mat_<MAT>_tot` and `tot` values are the physical emission rates used for
+  `set srcrate` when the source is later replaced by a tabulated `sb` spectrum.
+
+### 5.2 Building an `sb` spectrum from an emission spectrum
+
+Typical procedure: run the decay-source case with a detector on the emission
+spectrum (e.g. `det SPEC dr -11 void de GRID` and `ene GRID 4 <structure>`),
+read the per-group emission from the detector output, divide by the group
+widths to get a histogram source, and use those values as the `sb` table in a
+second run with `set srcrate <tot>` from `_gsrc.m`/`_nsrc.m`. `ene` type 4
+structures (e.g. `scale44`) are built in — see the appendix.
+
 ---
 
 ## 6. Data libraries
@@ -375,6 +403,7 @@ transport are bugs or geometry problems — check `set` options and geometry.
 | `INPUT_dep.m` | burnup inventory tables |
 | `INPUT.dep` | binary depletion data (`--rdep`) |
 | `INPUT_hisN.m` | history/batch-wise statistical data |
+| `INPUT_gsrc.m`, `INPUT_nsrc.m` | photon/neutron emission spectra of a decay source (`sg`), with total emission rates |
 | `INPUT_mdxN.m` | micro-depletion output (`set mdep`) |
 | `INPUT.coe` | automated group constant sequence |
 | `INPUT.wrk` | restart file (`set rfw` / `--rfw`) |
@@ -407,3 +436,28 @@ etc.; detectors are also stored as `DET[NAME]`.
 7. **Old versions**: single-dash CLI options, `mat fix`, `burn` semantics and
    some cards changed over time. Check the detected version with
    `get_environment` and consult `version_diffs.md` in the server repository.
+
+---
+
+## Appendix A. Pre-defined energy group structures (`ene` type 4)
+
+```
+ene NAME 4 STRUCTURE        % e.g. ene e 4 scale44
+```
+
+The structure is selected by name (built into the code); a `_ext` suffix gives
+the version spanning all energies (0 ... infinity). Pre-defined structures
+cannot be used directly in detectors — redefine them with an `ene` card first.
+Use the `list_energy_structures` tool or `get_reference('energy-structures')`
+for the full list. Common names: `scale44` (44 groups), `scale56`,
+`scale238`, `scale252`, `default2`, `defaultmg` (70), `nj17`/`nj19`,
+`cas2`/`cas3`, `wims*`, `sfr24g`/`sfr240g`.
+
+## Appendix B. Special (negative) response numbers
+
+Negative reaction numbers select special macroscopic responses for detectors:
+`-1` total flux, `-2` total cross section, `-4` capture, `-6` total absorption,
+`-8` fission power, `-9` total energy production, and other values listed in
+`extra/endf_reactions`. `-100 NAME` selects a user-defined response declared
+with a `fun` card (`fun NAME 1 5 E1 F1 E2 F2 ...`); without the matching `fun`
+card the detector fails at input processing.

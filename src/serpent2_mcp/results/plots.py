@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .matlab import parse_matlab_file
+from .matlab import parse_matlab_file, parse_matlab_file_limited
 from .outputs import detector_series
 
 
@@ -79,7 +79,7 @@ def plot_detector(
 ) -> Path:
     plt = _plt()
     labels = _labels(lang)
-    det = parse_matlab_file(det_path)
+    det = parse_matlab_file_limited(det_path, max_bytes=50 * 1024 * 1024, max_rows=20000)
     data = detector_series(det, det_name)
     points = [p for p in data["points"] if p["mean"] is not None]
     if not points:

@@ -21,19 +21,36 @@ def resolve_executable(exe: str | None) -> Path | None:
 
 
 def probe(exe: str | None) -> dict:
-    """Run the executable without arguments and parse version/usage."""
+    """Run the executable and parse version/usage.
+
+    Tries ``-version``/``--version`` first (old Serpent versions only support
+    the single-dash form), then falls back to the no-argument usage message
+    for the CLI flag style.
+    """
     path = resolve_executable(exe)
     if path is None:
         return {"found": False, "exe": exe, "error": "executable not found"}
+
+    version: str | None = None
+    version_output = ""
+    for flag in ("-version", "--version"):
+        rc, out, err = run_capture([str(path), flag], timeout=15)
+        text = f"{out}\n{err}"
+        if "usage" in text.lower() or "unknown" in text.lower():
+            continue
+        match = re.search(r"[Vv]ersion\s*[:=]?\s*([0-9][0-9A-Za-z._-]*)", text)
+        if match:
+            version = match.group(1)
+            version_output = text
+            break
+        if text.strip():
+            version_output = text
+
     rc, out, err = run_capture([str(path)], timeout=12)
-    text = f"{out}\n{err}"
-    version = None
-    match = re.search(r"[Vv]ersion\s*[:=]?\s*([0-9][0-9A-Za-z._-]*)", text)
-    if match:
-        version = match.group(1)
-    if re.search(r"--[a-z]", text):
+    usage = f"{out}\n{err}"
+    if re.search(r"--[a-z]", usage):
         style = "double"
-    elif re.search(r"(?<!-)-[a-z][a-z]+", text):
+    elif re.search(r"(?<!-)-[a-z][a-z]+", usage):
         style = "single"
     else:
         style = "double"
@@ -41,9 +58,10 @@ def probe(exe: str | None) -> dict:
         "found": True,
         "exe": str(path),
         "version": version,
+        "is_beta": "beta" in version_output.lower(),
         "flag_style": style,
         "exit_code": rc,
-        "usage_excerpt": text[:3000],
+        "usage_excerpt": usage[:3000],
         "probed_at": now_iso(),
     }
 

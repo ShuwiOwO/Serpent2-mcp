@@ -22,11 +22,13 @@ from typing import Any
 from . import __version__
 from .compat import Server
 from .config import Settings, load_settings
+from .knowledge import reference
 from .knowledge.store import Store, normalize_card_name
 from .knowledge.sync import (
     db_path,
     ensure_sync_async,
     load_static_cards,
+    seed_reference,
     seed_store_cards,
     sync,
     sync_status,
@@ -41,37 +43,37 @@ from .runner.probe import convert_option_style, probe_cached, resolve_executable
 from .util import human_size, now_iso, run_capture, stderr_log, truncate
 
 INSTRUCTIONS = """\
-Serpent 2 is a continuous-energy 3-D Monte Carlo particle transport code (VTT,
-Finland). Input files are whitespace-separated input cards. Cards are delimited
-by the *next card name*, not by lines, so one card may span many lines; card
-names are case-insensitive; comments are `%` (to end of line) or `/* ... */`.
+Serpent 2 is a continuous-energy 3-D Monte Carlo particle transport code (VTT).
+Input files are input cards; a card is delimited by the NEXT CARD NAME, not by
+lines, so one card may span many lines. Comments: `%` and `/* */`. Card names
+are case-insensitive.
 
-Follow this workflow for every Serpent task:
-
-1. Never guess syntax. Before using a card or option, call get_card (e.g.
-   get_card("surf"), get_card("set acelib"), get_card("sb")). The returned
-   syntax is generated from the official manual and is authoritative.
-2. Read get_reference before writing a non-trivial input: it summarises modes,
-   geometry, materials, sources, detectors, burnup, output files and pitfalls.
-3. Always call validate_input on the input file and fix reported errors before
-   running. With a Serpent binary available, level 3 also executes
-   `sss2 -noplot -norun`.
-4. Run calculations with run: it starts a background job and returns a job id.
-   Poll with job_status, read with job_output, stop with job_kill. Never assume
-   a calculation completed without checking.
-5. Interpret results with get_results (k-eff/balances from _res.m, detectors
-   from _det.m, inventory from _dep.m) and draw PNG plots with plot_results.
-6. Use get_environment to find the executable, version and data libraries;
-   use list_data_libraries / download_data_library to fetch cross-section data
-   (for photon transport call install_photon_data; the mcplib84 ACE data file
-   must be obtained manually from LANL).
+Working rules:
+1. Read the user's task literally. If they provide a reference/previous-task
+   file or an exact method (geometry, source, response, normalisation), open
+   those files and follow them exactly — do not substitute another method.
+2. Never guess syntax: call get_card for every card/parameter you are not
+   certain about (e.g. sg, sb, srad, de, dr, ene), and search_docs when the
+   meaning is unclear. get_reference has the curated summary.
+3. Validate before running (validate_input; level 3 runs `sss2 --norun`) and
+   smoke-test small inputs before long runs. Long runs are background jobs:
+   run -> job_status/job_output -> job_kill; never wait synchronously.
+4. Verify every run: get_results for _res.m (TOT_SRCRATE, NORM_COEF, k-eff),
+   _det*.m detectors and _gsrc.m/_nsrc.m for decay sources (their `tot` is the
+   emission rate for set srcrate). If a detector is empty or the source rate
+   is zero, fix the input instead of changing the method.
+5. Respect the installed version: get_environment reports it; old versions use
+   single-dash CLI flags (handled automatically) and some syntax differs.
 
 Minimal external-source input: set title; surf; cell; mat; src ...; set nps N;
-set acelib "path". Criticality replaces src/set nps with set pop NPG NGEN NSKIP.
-The binary is auto-detected as ./sss2 in the workspace or from PATH; data files
-are auto-detected nearby. Old Serpent versions (single-dash CLI) are handled.
+set acelib "data.xsdata". Criticality replaces src/set nps with set pop
+NPG NGEN NSKIP. Decay source: `src NAME p sg DMAT MODE` plus set declib (and
+set nfylib for spontaneous-fission neutrons); emitting nuclides carry decay
+data (ZAI or element form without library suffix). Pre-defined energy grids:
+`ene NAME 4 scale44`; special detector responses: negative dr numbers, -100
+NAME needs a fun card. Library data lives under xsdata/ with the stable names
+data.xsdata / data.dec / data.nfy.
 """
-
 
 class App:
     def __init__(self, settings: Settings):
@@ -84,6 +86,7 @@ class App:
         try:
             store = Store(db_path(settings))
             seed_store_cards(store)
+            seed_reference(store)
             index = Index.from_store(store)
             store.close()
             return index
@@ -94,6 +97,7 @@ class App:
     def open_store(self) -> Store:
         store = Store(db_path(self.settings))
         seed_store_cards(store)
+        seed_reference(store)
         return store
 
 
@@ -214,6 +218,25 @@ def _rel_to(settings: Settings, path: str | Path) -> str:
         return str(path)
 
 
+def _data_role(path: Path) -> str:
+    name = path.name.lower()
+    if name == "mcplib.xsdata":
+        return "photon directory file"
+    if name.endswith(".xsdata"):
+        if "+" in name:
+            return "variant directory file (special cases)"
+        if name == "data.xsdata":
+            return "main directory file (stable alias)"
+        return "neutron/mixed directory file"
+    if name.endswith(".dec"):
+        return "radioactive decay data"
+    if name.endswith(".nfy"):
+        return "neutron-induced fission yields"
+    if name.endswith(".bra"):
+        return "isomeric branching ratios"
+    return "data"
+
+
 def _parse_serpent_errors(text: str) -> list[dict[str, Any]]:
     errors: list[dict[str, Any]] = []
     pattern = re.compile(
@@ -279,15 +302,16 @@ def create_server(settings: Settings) -> Server:
                     except OSError:
                         size = 0
                     relative = _rel_to(s, path)
-                    data_files.append({"path": str(path), "relative": relative, "size": human_size(size)})
-                    if path.suffix == ".xsdata":
-                        _add_hint(f'set acelib "{relative}"')
-                    elif path.suffix == ".dec":
-                        _add_hint(f'set declib "{relative}"')
-                    elif path.suffix == ".nfy":
-                        _add_hint(f'set nfylib "{relative}"')
-                    elif path.suffix == ".bra":
-                        _add_hint(f'set bralib "{relative}"')
+                    data_files.append(
+                        {
+                            "path": str(path),
+                            "relative": relative,
+                            "size": human_size(size),
+                            "role": _data_role(path),
+                        }
+                    )
+            for hint in datadl.input_lines(directory, rel_root=s.workspace):
+                _add_hint(hint)
             photon_dir_candidate = directory / "photon_data"
             if photon_dir_candidate.is_dir():
                 _add_hint(f'set pdatadir "{_rel_to(s, photon_dir_candidate)}"')
@@ -296,11 +320,12 @@ def create_server(settings: Settings) -> Server:
             warnings.append(
                 "sss2 executable not found. Put ./sss2 in the workspace, add it to PATH, or set SERPENT_EXE."
             )
-        version = (probe.get("version") or "").lower()
-        if version and ("beta" in version or version.startswith("1.")):
+        version = str(probe.get("version") or "")
+        if probe.get("is_beta") or version.startswith(("1.", "2.0", "2.1")):
             warnings.append(
-                "Detected a pre-2.0 Serpent version: some modern cards/options may not exist. "
-                "Consult the version notes in get_reference('versions')."
+                f"Legacy Serpent detected ({version or 'unknown version'}): the online docs describe 2.2.5. "
+                "Card syntax is taken from the matching documentation where possible; verify uncommon "
+                "cards with get_card and validate with sss2 -norun."
             )
 
         photon_dir = s.workspace / "photon_libraries"
@@ -360,6 +385,13 @@ def create_server(settings: Settings) -> Server:
         text = _primer()
         if topic:
             topic_lower = topic.lower()
+            if "energy" in topic_lower and "structure" in topic_lower:
+                return (
+                    "Pre-defined energy group structures for ene type 4.\n"
+                    "Usage: ene NAME 4 <structure> (or <structure>_ext for full energy range).\n"
+                    "They cannot be used directly in detectors; redefine them with an ene card.\n\n"
+                    + reference.structures_text(limit=200)
+                )
             if "version" in topic_lower or "отличи" in topic_lower:
                 diffs = _primer_path("version_diffs.md").read_text(encoding="utf-8")
                 section = _section_from_markdown(diffs, topic) if topic_lower not in {"versions", "version"} else diffs
@@ -433,14 +465,51 @@ def create_server(settings: Settings) -> Server:
         if card is None:
             card = _load_static_card(name)
         if card is None:
+            # Parameter lookup: e.g. get_card("sg") -> the src card that uses it.
+            target = normalize_card_name(name)[0]
+            for key, params in app.index.params.items():
+                if target in params:
+                    kind, _, card_name = key.partition(":")
+                    parent = {"name": card_name or key, "kind": kind or "card"}
+                    return json.dumps(
+                        {
+                            "requested": name,
+                            "resolved_as": "parameter",
+                            "card": parent["name"],
+                            "kind": parent["kind"],
+                            "note": f"'{name}' is a parameter of the {parent['kind']} '{parent['name']}'. "
+                            f"Call get_card('{parent['name']}') for the full syntax.",
+                            "legacy_note": reference.legacy_note(target),
+                        },
+                        indent=2,
+                        ensure_ascii=False,
+                    )
             names = difflib.get_close_matches(
-                normalize_card_name(name)[0], [n.lower() for n in _all_card_names()], n=6
+                target, [n.lower() for n in _all_card_names()], n=6
             )
             hint = f" Did you mean: {', '.join(names)}?" if names else ""
             return f"Card '{name}' was not found.{hint}"
         if card.get("syntax") is None and card.get("params"):
             card["syntax"] = ""
+        note = reference.legacy_note(card.get("name", ""))
+        if note:
+            card["legacy_note"] = note
+        if card.get("kind") == "card" and card.get("name") == "ene":
+            card["predefined_structures"] = reference.structures_text(limit=200)
         return json.dumps(card, indent=2, ensure_ascii=False)
+
+    @server.tool(
+        description=(
+            "List the pre-defined energy group structures available for the ene card "
+            "(name, number of groups, description; '_ext' variants span all energies)."
+        )
+    )
+    def list_energy_structures() -> str:
+        return json.dumps(
+            {"structures": reference.structures(), "usage": "ene NAME 4 <structure>"},
+            indent=2,
+            ensure_ascii=False,
+        )
 
     @server.tool(
         description=(
@@ -702,11 +771,12 @@ def create_server(settings: Settings) -> Server:
             _require_allowed(s, wd)
         except ValueError as exc:
             return str(exc)
-        wanted = set(sections) if sections else {"res", "det", "dep"}
+        wanted = set(sections) if sections else {"res", "det", "dep", "source"}
 
         res_path: Path | None = None
         det_path: Path | None = None
         dep_path: Path | None = None
+        source_paths: list[Path] = []
         if file:
             candidate = s.resolve(file)
             if not candidate.is_file():
@@ -731,6 +801,7 @@ def create_server(settings: Settings) -> Server:
                 det_path = found["det"][0]
             if found["dep"]:
                 dep_path = found["dep"][0]
+            source_paths = found.get("source", [])
 
         result: dict[str, Any] = {"workdir": str(wd)}
         if "res" in wanted and res_path is not None:
@@ -752,13 +823,26 @@ def create_server(settings: Settings) -> Server:
                         extracted[name] = rows[: max(1, min(int(max_rows or 60), 500))]
                 result["variables"] = extracted
         if "det" in wanted and det_path is not None:
-            det = results_outputs.read_det(det_path)
+            info: dict[str, Any] = {}
+            det = results_outputs.read_det(det_path, info=info)
+            summary = results_outputs.summarize_det(det)
             result["det_file"] = str(det_path)
-            result["detectors"] = results_outputs.summarize_det(det)["detectors"]
+            result["detectors"] = summary["detectors"]
+            if info.get("streamed"):
+                result["detector_parse"] = {
+                    "streamed": True,
+                    "file_size": info.get("file_size"),
+                    "truncated_variables": info.get("truncated", []),
+                    "max_rows": 500,
+                    "note": "large detector file: values are capped; use plot_results for spectra",
+                }
         if "dep" in wanted and dep_path is not None:
             dep = results_outputs.read_dep(dep_path)
             result["dep_file"] = str(dep_path)
             result["depletion"] = results_outputs.summarize_dep(dep)
+        if "source" in wanted and source_paths:
+            result["source_file"] = str(source_paths[0])
+            result["source_emission"] = results_outputs.summarize_source_files(source_paths)
         return json.dumps(result, indent=2, ensure_ascii=False, default=str)
 
     @server.tool(
@@ -1025,7 +1109,7 @@ def create_server(settings: Settings) -> Server:
             "missing files so that incomplete data sets are visible immediately."
         )
     )
-    def check_data_paths(directory: str | None = None, apply: bool = True) -> str:
+    def check_data_paths(directory: str | None = None, apply: bool = True, relative: bool = False) -> str:
         s = app.settings
         target = s.resolve(directory) if directory else (s.data_dirs[0] if s.data_dirs else s.workspace / "xsdata")
         try:
@@ -1034,21 +1118,23 @@ def create_server(settings: Settings) -> Server:
             return str(exc)
         if not target.is_dir():
             return f"Directory not found: {target}"
-        stats = datadl.patch_xsdata_files(target, rel_root=str(s.workspace), apply=apply, log=stderr_log)
+        stats = datadl.patch_xsdata_files(
+            target, rel_root=str(s.workspace), apply=apply, relative=relative, log=stderr_log
+        )
         stats["paths_relative_to"] = str(s.workspace)
         return json.dumps(stats, indent=2, ensure_ascii=False)
 
     @server.tool(
         description=(
             "One-call data setup for a fresh machine: downloads and extracts a neutron data package "
-            "(neutron: endfb71|jeff32|jendl40|fendl30; decay and fission-yield data are included) "
-            "and the thermal scattering library (sss_thxs), patches every '/xs/data/' path inside "
-            "the extracted *.xsdata files to the local files (relative to the workspace root), "
-            "optionally installs photon physics data, and returns ready-to-paste "
-            "set acelib/declib/nfylib/pdatadir lines. Runs as a background job; the transfer is "
-            "6-8 GB, so follow it with job_status. The mcplib84 photon ACE file is LANL/RSICC data "
-            "and cannot be downloaded automatically: on a partial result see manual_download or "
-            "call mcplib84_instructions."
+            "(neutron: endfb71|jeff32|jendl40|fendl30; ACE + decay + fission yields), the thermal "
+            "scattering library (sss_thxs), the ENDF/B-VII decay/yield files used by older decks "
+            "(sss_endfb7.dec/nfy) and the photon data. Rewrites every '/xs/data/' path inside the "
+            "extracted *.xsdata files to absolute local paths, adds stable aliases "
+            "(data.xsdata/data.dec/data.nfy) and natural-element aliases, and returns ready-to-paste "
+            "set lines. Runs as a background job (6-8 GB): follow with job_status. mcplib84 photon "
+            "ACE data is LANL/RSICC licensed and cannot be downloaded automatically: on a partial "
+            "result see manual_download or call mcplib84_instructions."
         )
     )
     def setup_data(
@@ -1056,6 +1142,7 @@ def create_server(settings: Settings) -> Server:
         dest: str | None = None,
         with_photon: bool = True,
         with_thxs: bool = True,
+        with_other_data: bool = True,
         ace_file: str | None = None,
         ace_url: str | None = None,
     ) -> str:
@@ -1091,6 +1178,8 @@ def create_server(settings: Settings) -> Server:
             argv.append("--no-photon")
         if not with_thxs:
             argv.append("--no-thxs")
+        if not with_other_data:
+            argv.append("--no-other-data")
         if ace_file:
             candidate = s.resolve(ace_file)
             if not candidate.is_file():
@@ -1108,8 +1197,8 @@ def create_server(settings: Settings) -> Server:
         summary["paths_relative_to"] = str(s.workspace)
         summary["note"] = (
             "Large download (6-8 GB); poll job_status. When finished, use the 'use_in_input' lines "
-            "from the job progress/output, or call get_environment. Paths are written relative to "
-            "the workspace root (where sss2 is started); alternatively set SERPENT_DATA."
+            "from the job progress/output, or call get_environment. Directory files reference "
+            "absolute paths; input hints are relative to the workspace root."
         )
         return json.dumps(summary, indent=2, ensure_ascii=False)
 
@@ -1166,6 +1255,24 @@ def create_server(settings: Settings) -> Server:
                 "install_photon_data or check_data_paths again."
             )
         return json.dumps(payload, indent=2, ensure_ascii=False)
+
+    @server.tool(
+        description=(
+            "Validate the installed Serpent executable and data: repairs stale relative paths in "
+            "*.xsdata, builds a minimal -norun input from the installed directory/decay/yield files, "
+            "runs `sss2 -noplot -norun` and reports the version, the exact set lines used, any input "
+            "errors and missing referenced data files. Fast (seconds), safe (no transport)."
+        )
+    )
+    def selfcheck(directory: str | None = None) -> str:
+        s = app.settings
+        target = s.resolve(directory) if directory else (s.data_dirs[0] if s.data_dirs else s.workspace / "xsdata")
+        try:
+            _require_allowed(s, target)
+        except ValueError as exc:
+            return str(exc)
+        report = datadl.selfcheck(s.exe, target, log=stderr_log)
+        return json.dumps(report, indent=2, ensure_ascii=False)
 
     # -- MCP resources (best effort; clients differ in support) ------------
 

@@ -183,3 +183,47 @@ def test_folga_style_source_no_false_positive(index):
     issues = check(text, index)
     assert not [i for i in issues if i.severity == "error"]
     assert not [i for i in issues if i.code == "unknown-param"]
+
+
+def test_sg_without_decay_nuclide_warns(index):
+    text = (
+        'mat cm -13.5\n96250.03c 1\n'
+        'src s p sg cm 1 sp 0 0 0\n'
+        'set declib "d.dec"\nset acelib "d.xsdata"\nset nps 10\n'
+    )
+    assert any(i.code == "sg-no-decay" for i in check(text, index))
+
+
+def test_sg_with_decay_nuclide_is_clean(index):
+    text = (
+        'mat cm -13.5\nCm-250 1\n'
+        'src s p sg cm 1 sp 0 0 0\n'
+        'set declib "d.dec"\nset acelib "d.xsdata"\nset nps 10\n'
+    )
+    assert not any(i.code == "sg-no-decay" for i in check(text, index))
+
+
+def test_de_predefined_structure_must_be_redefined(index):
+    text = (
+        'surf 1 sph 0 0 0 1\ncell 1 0 void -1\ncell 2 0 outside 1\n'
+        'src 1 sp 0 0 0 se 1.0\ndet f de scale44\n'
+        'set acelib "d.xsdata"\nset nps 10\n'
+    )
+    assert any(i.code == "de-ene" for i in check(text, index))
+
+
+def test_ene_type4_unknown_structure(index):
+    issues = check("ene e 4 nonsense\n", index)
+    assert any(i.code == "ene-structure" for i in issues)
+    assert not any(i.code == "ene-structure" for i in check("ene e 4 scale44\n", index))
+
+
+def test_dr_minus100_requires_fun(index):
+    base = (
+        'surf 1 sph 0 0 0 1\ncell 1 0 void -1\ncell 2 0 outside 1\n'
+        'src 1 sp 0 0 0 se 1.0\n'
+    )
+    without = base + 'det d dr -100 myfun\nset acelib "d.xsdata"\nset nps 10\n'
+    with_fun = base + 'fun myfun 1 5 1 1 2 2\ndet d dr -100 myfun\nset acelib "d.xsdata"\nset nps 10\n'
+    assert any(i.code == "dr-fun" for i in check(without, index))
+    assert not any(i.code == "dr-fun" for i in check(with_fun, index))

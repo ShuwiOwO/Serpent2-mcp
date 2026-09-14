@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from .matlab import MatValue, parse_matlab_file
+from .matlab import MatValue, parse_matlab_file, parse_matlab_file_limited
 
 RES_KEFF_KEYS = ["ANA_KEFF", "IMP_KEFF", "COL_KEFF", "ABS_KEFF", "ABS_KINF", "SIX_FF_KEFF"]
 RES_POWER_KEYS = ["TOT_POWER", "TOT_POWDENS", "TOT_FLUX", "TOT_FISSRATE", "TOT_CAPTRATE", "TOT_GENRATE"]
@@ -29,28 +29,44 @@ RES_RUN_KEYS = [
 
 
 def find_outputs(workdir: str | Path, input_name: str) -> dict[str, list[Path]]:
-    """Find Serpent output files related to an input name."""
+    """Find Serpent output files related to an input name.
+
+    Serpent keeps the full input file name including its extension, so both
+    ``case.inp -> case.inp_res.m`` and ``case -> case_res.m`` are supported.
+    """
     workdir = Path(workdir)
-    stem = Path(input_name).stem
-    outputs: dict[str, list[Path]] = {"res": [], "det": [], "dep": [], "his": [], "mdx": [], "other": []}
+    full = Path(input_name).name
+    short = Path(full).stem
+    stems = [full] + ([short] if short != full else [])
+    outputs: dict[str, list[Path]] = {
+        "res": [],
+        "det": [],
+        "dep": [],
+        "his": [],
+        "mdx": [],
+        "source": [],
+        "other": [],
+    }
     if not workdir.is_dir():
         return outputs
-    patterns = {
-        "res": [f"{stem}_res.m"],
-        "dep": [f"{stem}_dep.m", f"{stem}_dep*.m"],
-        "mdx": [f"{stem}_mdx*.m", f"{stem}_mdep.inc"],
-        "his": [f"{stem}_his*.m"],
-        "other": [f"{stem}.out", f"{stem}_xs*.m", f"{stem}_stat*.m"],
-    }
-    for kind, globs in patterns.items():
-        for pattern in globs:
-            for path in sorted(workdir.glob(pattern)):
-                if path not in outputs[kind]:
-                    outputs[kind].append(path)
-    det_re = re.compile(rf"^{re.escape(stem)}_det\d*(b\d+)?\.m$")
-    for path in sorted(workdir.glob(f"{stem}_det*.m")):
-        if det_re.match(path.name):
-            outputs["det"].append(path)
+    for stem in stems:
+        patterns = {
+            "res": [f"{stem}_res.m"],
+            "dep": [f"{stem}_dep.m", f"{stem}_dep*.m"],
+            "mdx": [f"{stem}_mdx*.m", f"{stem}_mdep.inc"],
+            "his": [f"{stem}_his*.m"],
+            "source": [f"{stem}_gsrc.m", f"{stem}_nsrc.m"],
+            "other": [f"{stem}.out", f"{stem}_xs*.m", f"{stem}_stat*.m", f"{stem}.seed"],
+        }
+        for kind, globs in patterns.items():
+            for pattern in globs:
+                for path in sorted(workdir.glob(pattern)):
+                    if path not in outputs[kind]:
+                        outputs[kind].append(path)
+        det_re = re.compile(rf"^{re.escape(stem)}_det\d*(b\d+)?\.m$")
+        for path in sorted(workdir.glob(f"{stem}_det*.m")):
+            if det_re.match(path.name) and path not in outputs["det"]:
+                outputs["det"].append(path)
     return outputs
 
 
@@ -249,3 +265,37 @@ def summarize_dep(dep: dict[str, MatValue], max_points: int = 100) -> dict[str, 
 
 def read_dep(path: str | Path) -> dict[str, MatValue]:
     return parse_matlab_file(path)
+
+
+MAX_DET_BYTES = 20 * 1024 * 1024
+
+
+def read_det(
+    path: str | Path,
+    max_bytes: int = MAX_DET_BYTES,
+    max_rows: int = 500,
+    info: dict | None = None,
+) -> dict[str, MatValue]:
+    """Read a detector file; huge files are streamed with row limits."""
+    return parse_matlab_file_limited(path, max_bytes=max_bytes, max_rows=max_rows, info=info)
+
+
+def summarize_source_files(paths: list[Path]) -> dict[str, Any]:
+    """Summarise _gsrc.m/_nsrc.m: total emission rates used for set srcrate."""
+    summary: dict[str, Any] = {"files": [str(path) for path in paths], "materials": {}}
+    for path in paths:
+        try:
+            data = parse_matlab_file(path)
+        except OSError:
+            continue
+        for name, value in data.items():
+            if name.startswith("mat_") and name.endswith("_tot"):
+                material = name[len("mat_"):-len("_tot")]
+                scalar = value.scalar()
+                if scalar is not None:
+                    summary["materials"].setdefault(material, {})["total_per_s"] = scalar
+            elif name == "tot":
+                scalar = value.scalar()
+                if scalar is not None:
+                    summary["total_per_s"] = scalar
+    return summary

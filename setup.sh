@@ -25,10 +25,16 @@
 #   --opencode-global write/merge ~/.config/opencode/opencode.json
 #   --no-opencode     never ask; print the manual instruction instead
 #
+# Skill options:
+#   --skill           install SKILL.md into <launch dir>/.opencode/skill/serpent2 (default)
+#   --global-skill    install into ~/.config/opencode/skill/serpent2
+#   --no-skill        do not install the skill
+#
 # The neutron package includes ACE files, decay (dec) and fission-yield (nfy)
-# data. Paths inside the directory files are rewritten relative to this
-# directory (the workspace root, where sss2 lives). Downloads are resumable
-# and show a single-line progress bar in the terminal.
+# data; the ENDF/B-VII decay/yield files used by older decks are downloaded
+# too. Paths inside the directory files are rewritten to absolute local paths,
+# stable aliases (data.xsdata/data.dec/data.nfy) and natural-element aliases
+# are added. Downloads are resumable and show a one-line progress bar.
 #
 # Only mcplib84 (photon ACE cross sections, LANL/RSICC licensed) cannot be
 # downloaded automatically; the script tells you exactly where to put it.
@@ -53,6 +59,7 @@ WITH_PHOTON=1
 WITH_THXS=1
 ASSUME_YES=0
 OPENCODE_MODE="ask"
+SKILL_MODE="local"
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -70,9 +77,12 @@ while [ $# -gt 0 ]; do
         --no-thxs) WITH_THXS=0 ;;
         --yes|-y) ASSUME_YES=1 ;;
         --opencode) OPENCODE_MODE="local" ;;
+        --skill) SKILL_MODE="local" ;;
+        --global-skill) SKILL_MODE="global" ;;
+        --no-skill) SKILL_MODE="none" ;;
         --opencode-global) OPENCODE_MODE="global" ;;
         --no-opencode) OPENCODE_MODE="none" ;;
-        -h|--help) sed -n '2,38p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,42p' "$0"; exit 0 ;;
         *) echo "Unknown option: $1" >&2; exit 2 ;;
     esac
     shift
@@ -292,6 +302,36 @@ fi
 echo ""
 echo "Done. Verify the server starts:"
 echo "  $DIR/.venv/bin/python -m serpent2_mcp --status"
+
+# --- skill ------------------------------------------------------------------
+
+SKILL_SRC="$DIR/skills/serpent2/SKILL.md"
+if [ "$SKILL_MODE" != "none" ] && [ -f "$SKILL_SRC" ]; then
+    if [ "$SKILL_MODE" = "global" ]; then
+        SKILL_DST="$HOME/.config/opencode/skill/serpent2"
+    else
+        SKILL_DST="$CALL_DIR/.opencode/skill/serpent2"
+    fi
+    mkdir -p "$SKILL_DST"
+    cp "$SKILL_SRC" "$SKILL_DST/SKILL.md"
+    echo ""
+    echo "Skill installed: $SKILL_DST/SKILL.md"
+elif [ "$SKILL_MODE" = "none" ]; then
+    echo ""
+    echo "Skill installation skipped (--no-skill)."
+fi
+
+# --- self-check -------------------------------------------------------------
+
+if [ "$DATA_OK" = "1" ] && [ -x "$DIR/sss2" ]; then
+    echo ""
+    echo "Self-check: running a minimal input through ./sss2 -norun ..."
+    if "$VENV_PY" -m serpent2_mcp.runner.datadl selfcheck --exe "$DIR/sss2" --data-dir "$DATA_DIR" 2>/dev/null         | sed -n '/^{/,$p'         | "$VENV_PY" -c 'import json,sys; d=json.load(sys.stdin); print("  ok:", d.get("ok"), "| exit:", d.get("exit_code"), "| errors:", d.get("errors")); sys.exit(0 if d.get("ok") else 1)'; then
+        echo "Self-check passed."
+    else
+        echo "WARNING: self-check failed — see the report above; check the data directory and paths." >&2
+    fi
+fi
 
 # --- opencode.json ----------------------------------------------------------
 
