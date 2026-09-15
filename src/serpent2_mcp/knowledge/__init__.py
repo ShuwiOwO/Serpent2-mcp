@@ -1,1 +1,0 @@
-"""Serpent documentation knowledge base."""

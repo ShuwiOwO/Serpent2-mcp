@@ -18,6 +18,9 @@ opencode.jsonc
 serpent2-mcp.toml
 .serpent2-mcp.toml
 
+# --- Local project notes / handoff (not for the repository) ---
+PROJECT_NOTES.md
+
 # --- Local MCP runtime state (jobs, logs, caches) ---
 .serpent2-mcp/
 *.log
@@ -27,12 +30,19 @@ dist-offline/
 wheelhouse/
 *.tar.gz
 
-# --- Serpent nuclear data libraries (large; use serpent_download_data_library) ---
+# --- Serpent nuclear data libraries (large/proprietary; use tools/setup-env.sh) ---
 *.xsdata
+*.xsdir
 *.dec
 *.nfy
 *.bra
 data/
+xsdata/
+acedata/
+photon_data/
+mcplib63
+mcplib84
+sss2
 
 # --- Photon data: mcplib84 is LANL/RSICC data, not for public redistribution ---
 photon_libraries/
@@ -67,3 +77,9 @@ In_*.txt
 
 # Runtime artifact written by the data downloader when no explicit path is set
 progress.json
+
+# --- Frozen legacy MCP prototype (local only, never publish) ---
+BACKUP/
+
+# --- Personal task files (never commit) ---
+*.docx
